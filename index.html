@@ -1,0 +1,1045 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dispatch — Economic Load Dispatch Analysis Suite</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+<script>
+  if (!window.Plotly) {
+    document.write('<script src="https://cdn.jsdelivr.net/npm/plotly.js-dist@2.27.0/plotly.min.js"><\/script>');
+  }
+</script>
+<style>
+  :root{
+    --bg:#F5F6F8;
+    --panel:#FFFFFF;
+    --line:#DCE1E8;
+    --text:#16202A;
+    --muted:#5B6B7C;
+    --copper:#C1652B;
+    --copper-soft:#F2E3D8;
+    --teal:#0E8C82;
+    --teal-soft:#E1F3F1;
+    --danger:#C1402E;
+    --navy:#1E3A5F;
+    --font-head:'IBM Plex Sans',sans-serif;
+    --font-mono:'IBM Plex Mono',monospace;
+    --shadow: 0 1px 2px rgba(20,30,40,0.04), 0 4px 14px rgba(20,30,40,0.05);
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--text);
+    font-family:var(--font-head);
+    min-height:100vh;
+  }
+  .wrap{max-width:1280px;margin:0 auto;padding:32px 24px 90px;}
+
+  .layout{
+    display:grid;
+    grid-template-columns:260px 1fr;
+    gap:20px;
+    align-items:start;
+  }
+  @media(max-width:900px){.layout{grid-template-columns:1fr;}}
+
+  .sidebar{
+    display:flex;
+    flex-direction:column;
+    gap:12px;
+    position:sticky;
+    top:20px;
+    align-self:start;
+  }
+  .sidebar-title{
+    font-size:12px;
+    letter-spacing:1px;
+    text-transform:uppercase;
+    color:var(--muted);
+    font-family:var(--font-mono);
+  }
+  .tab-btn{
+    border:none;
+    width:100%;
+    text-align:left;
+    padding:14px 16px;
+    border-radius:12px;
+    background:#fff;
+    color:var(--navy);
+    cursor:pointer;
+    transition:transform .15s, background .15s, color .15s;
+    font-family:var(--font-mono);
+    font-weight:600;
+  }
+  .tab-btn:hover{background:#eef2ff;}
+  .tab-btn.active{
+    background:var(--navy);
+    color:#fff;
+    box-shadow:0 12px 30px rgba(15,23,42,0.12);
+  }
+
+  .main{display:flex;flex-direction:column;gap:20px;}
+  .tab-panel.hidden{display:none;}
+
+  header{
+    display:flex;justify-content:space-between;align-items:flex-end;
+    border-bottom:2px solid var(--navy);padding-bottom:18px;margin-bottom:26px;
+    flex-wrap:wrap;gap:12px;
+  }
+  .brand{display:flex;align-items:center;gap:12px;}
+  .brand-mark{
+    width:38px;height:38px;background:var(--navy);border-radius:4px;
+    display:flex;align-items:center;justify-content:center;color:#fff;
+    font-family:var(--font-mono);font-weight:600;font-size:16px;flex-shrink:0;
+  }
+  h1{font-size:21px;margin:0;font-weight:700;letter-spacing:0.2px;color:var(--navy);}
+  .subtitle{color:var(--muted);font-size:12.5px;font-family:var(--font-mono);margin-top:2px;}
+  .badge{
+    font-family:var(--font-mono);font-size:11px;color:var(--teal);
+    border:1px solid var(--teal);background:var(--teal-soft);padding:5px 10px;border-radius:20px;
+    letter-spacing:0.5px;font-weight:600;
+  }
+
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;}
+  @media(max-width:900px){.grid{grid-template-columns:1fr;}}
+
+  .panel{
+    background:var(--panel);
+    border:1px solid var(--line);border-radius:10px;padding:22px;
+    box-shadow:var(--shadow);
+  }
+  .panel h2{
+    font-size:12px;text-transform:uppercase;letter-spacing:1.4px;color:var(--navy);
+    margin:0 0 16px;font-weight:700;display:flex;align-items:center;gap:8px;
+  }
+  .panel h2::before{content:'';width:14px;height:2.5px;background:var(--copper);display:inline-block;}
+
+  label{display:block;font-size:11.5px;color:var(--muted);margin-bottom:5px;font-family:var(--font-mono);}
+  input[type=number], input[type=text], select{
+    width:100%;background:#FBFCFD;border:1px solid var(--line);color:var(--text);
+    padding:9px 10px;border-radius:6px;font-family:var(--font-mono);font-size:13.5px;
+    outline:none;transition:border-color .15s, box-shadow .15s;
+  }
+  select{appearance:none;}
+  input:focus, select:focus{border-color:var(--copper);box-shadow:0 0 0 3px var(--copper-soft);}
+  input:disabled{opacity:0.4;background:#F0F1F3;}
+
+  .row4{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px;}
+  .row5{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;}
+
+  .limit-toggle{display:flex;align-items:center;gap:8px;margin-bottom:12px;font-size:12.5px;color:var(--muted);}
+  .limit-toggle input{width:auto;}
+
+  button{
+    font-family:var(--font-mono);font-size:12.5px;letter-spacing:0.4px;
+    border-radius:6px;border:1px solid var(--line);cursor:pointer;
+    padding:9px 14px;background:#fff;color:var(--text);transition:.15s;
+  }
+  button:hover{border-color:var(--copper);color:var(--copper);}
+  .btn-primary{
+    background:var(--navy);border-color:var(--navy);color:#fff;font-weight:600;width:100%;
+    padding:12px;font-size:13px;
+  }
+  .btn-primary:hover{background:#16304F;color:#fff;}
+  .btn-icon{padding:5px 9px;font-size:12px;}
+  .btn-danger:hover{border-color:var(--danger);color:var(--danger);}
+
+  table{width:100%;border-collapse:collapse;font-family:var(--font-mono);font-size:12.5px;margin-top:6px;}
+  th{
+    text-align:left;color:var(--muted);font-weight:600;font-size:10.5px;
+    text-transform:uppercase;letter-spacing:0.6px;padding:7px 8px;border-bottom:2px solid var(--line);
+  }
+  td{padding:8px;border-bottom:1px solid var(--line);}
+  tr:last-child td{border-bottom:none;}
+  td input{padding:5px 7px;font-size:12px;}
+  .gen-tag{color:var(--teal);font-weight:700;}
+  .actions-cell{display:flex;gap:6px;}
+
+  .empty-note{color:var(--muted);font-size:12px;font-family:var(--font-mono);padding:16px 4px;text-align:center;border:1px dashed var(--line);border-radius:8px;}
+
+  .demand-row{display:flex;gap:12px;align-items:flex-end;margin-top:18px;}
+  .demand-row > div{flex:1;}
+
+  .full{grid-column:1/-1;}
+
+  .stats-strip{
+    display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:22px;
+  }
+  @media(max-width:800px){.stats-strip{grid-template-columns:1fr 1fr;}}
+  .stat-card{
+    background:#fff;border:1px solid var(--line);border-radius:8px;padding:14px 16px;box-shadow:var(--shadow);
+  }
+  .stat-label{font-size:10.5px;color:var(--muted);letter-spacing:0.8px;text-transform:uppercase;margin-bottom:4px;font-family:var(--font-mono);}
+  .stat-value{font-family:var(--font-mono);font-size:23px;color:var(--navy);font-weight:700;}
+  .stat-value.copper{color:var(--copper);}
+  .stat-value.teal{color:var(--teal);}
+
+  .flow-diagram{position:relative;overflow-x:auto;padding:14px 6px;background:#FBFCFD;border:1px solid var(--line);border-radius:8px;margin-bottom:20px;}
+
+  .plots-2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:18px;}
+  .plots-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-top:18px;}
+  @media(max-width:900px){.plots-2, .plots-3{grid-template-columns:1fr;}}
+  .plot-box{background:#fff;border:1px solid var(--line);border-radius:8px;padding:10px;box-shadow:var(--shadow);}
+  .plot-box .cap{font-family:var(--font-mono);font-size:10.5px;color:var(--muted);text-align:center;margin-top:4px;}
+
+  #resultTable td:last-child, #resultTable th:last-child{text-align:right;}
+  #resultTable td:nth-child(2), #resultTable th:nth-child(2){text-align:right;}
+  #resultTable td:nth-child(4), #resultTable th:nth-child(4){text-align:right;}
+
+  .hidden{display:none !important;}
+  footer{margin-top:36px;text-align:center;color:var(--muted);font-family:var(--font-mono);font-size:11px;}
+
+  .section-note{color:var(--muted);font-size:12.5px;line-height:1.6;margin-top:0;}
+
+  ::-webkit-scrollbar{height:8px;width:8px;}
+  ::-webkit-scrollbar-thumb{background:var(--line);border-radius:4px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="brand">
+      <div class="brand-mark">&lambda;</div>
+      <div>
+        <h1>Dispatch — ELD Analysis Suite</h1>
+        <div class="subtitle">lambda-iteration economic load dispatch · sensitivity & convergence analytics</div>
+      </div>
+    </div>
+    <div class="badge">TRANSMISSION LOSSES NEGLECTED</div>
+  </header>
+
+  <div class="layout">
+    <div class="sidebar">
+      <div class="sidebar-title">Dashboard tabs</div>
+      <button class="tab-btn active" data-tab="tab-lambda" onclick="switchTab('tab-lambda')">Lambda dispatch</button>
+      <button class="tab-btn" data-tab="tab-meta" onclick="switchTab('tab-meta')">Metaheuristic methods</button>
+      <button class="tab-btn" data-tab="tab-compare" onclick="switchTab('tab-compare')">Comparisons</button>
+      <div class="sidebar-title">Quick actions</div>
+      <button class="btn-primary" style="width:100%;" onclick="loadSample()">Load sample system</button>
+    </div>
+
+    <div class="main">
+      <section id="tab-lambda" class="tab-panel">
+        <div class="panel">
+          <h2>Generator Cost Coefficients</h2>
+          <p class="section-note">Cost model: C(P) = aP&sup2; + bP + c (&#8377;/h). Add each generating unit's coefficients below.</p>
+          <div class="row4">
+            <div><label>a (&#8377;/MW&sup2;h)</label><input type="number" id="in-a" step="any" placeholder="0.004"></div>
+            <div><label>b (&#8377;/MWh)</label><input type="number" id="in-b" step="any" placeholder="5.3"></div>
+            <div><label>c (&#8377;/h)</label><input type="number" id="in-c" step="any" placeholder="500"></div>
+          </div>
+
+          <div class="limit-toggle">
+            <input type="checkbox" id="toggle-limits" onchange="onToggleLimits()">
+            <span>enforce generator Pmin / Pmax limits</span>
+          </div>
+
+          <div class="row5">
+            <div><label>Pmin (MW)</label><input type="number" id="in-pmin" step="any" disabled></div>
+            <div><label>Pmax (MW)</label><input type="number" id="in-pmax" step="any" disabled></div>
+          </div>
+
+          <button class="btn-primary" onclick="onAddGenerator()">+ Add generator</button>
+
+          <div style="margin-top:18px;">
+            <table id="gen-table"></table>
+            <div id="gen-empty" class="empty-note">No generators yet — add cost coefficients above.</div>
+          </div>
+
+          <div class="demand-row">
+            <div>
+              <label>System load demand P<sub>D</sub> (MW)</label>
+              <input type="number" id="in-demand" step="any" placeholder="e.g. 800">
+            </div>
+            <div style="flex:0 0 auto;">
+              <button class="btn-primary" style="padding:12px 22px;" onclick="onSolve()">Solve dispatch &rarr;</button>
+            </div>
+          </div>
+          <div style="margin-top:10px;">
+            <button style="width:100%;" onclick="loadSample()">Load sample 3-generator IEEE-style system</button>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h2>Cost & Marginal Cost Model</h2>
+          <p class="section-note">
+            Each generator's fuel cost is quadratic in output power. The solver finds a common
+            incremental (marginal) cost &lambda; (&#8377;/MWh) such that dC<sub>i</sub>/dP<sub>i</sub> = &lambda; for every unit, subject to &Sigma;P<sub>i</sub> = P<sub>D</sub>.
+          </p>
+          <div id="cost-equations"></div>
+        </div>
+
+        <div class="panel full hidden" id="result-panel">
+          <h2>Dispatch Result & Analytics</h2>
+
+          <div class="stats-strip">
+            <div class="stat-card">
+              <div class="stat-label">Incremental cost &lambda;</div>
+              <div class="stat-value copper" id="out-lambda">—</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">Total demand P<sub>D</sub></div>
+              <div class="stat-value teal" id="out-demand">—</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">Iterations to converge</div>
+              <div class="stat-value" id="out-iters">—</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">Total fuel cost</div>
+              <div class="stat-value" id="out-totalcost">—</div>
+            </div>
+          </div>
+
+          <div class="flow-diagram" id="flow-diagram"></div>
+
+          <table id="resultTable" style="margin-top:20px;">
+            <thead><tr><th>Generator</th><th>Power (MW)</th><th>Loading %</th><th>Cost (&#8377;/h)</th></tr></thead>
+            <tbody id="resultTableBody"></tbody>
+          </table>
+
+          <div class="plots-3">
+            <div class="plot-box">
+              <div id="plot-convergence" style="width:100%;height:260px;"></div>
+              <div class="cap">&lambda; convergence trace across iterations</div>
+            </div>
+            <div class="plot-box">
+              <div id="plot-incremental" style="width:100%;height:260px;"></div>
+              <div class="cap">Incremental cost curves & operating point</div>
+            </div>
+            <div class="plot-box">
+              <div id="plot-loading" style="width:100%;height:260px;"></div>
+              <div class="cap">Generator loading (% of Pmax / share)</div>
+            </div>
+          </div>
+
+          <div class="plots-2">
+            <div class="plot-box">
+              <div id="plot-sweep" style="width:100%;height:280px;"></div>
+              <div class="cap">Sensitivity: total cost & &lambda; vs. demand sweep</div>
+            </div>
+            <div class="plot-box">
+              <div id="plot-power-pie" style="width:100%;height:280px;"></div>
+              <div class="cap">Power contribution share by generator</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="tab-meta" class="tab-panel hidden">
+        <div class="panel">
+          <h2>Metaheuristic Dispatch</h2>
+          <p class="section-note">Choose a metaheuristic algorithm to compare valve-point-aware economic dispatch with the lambda method.</p>
+          <div class="row5">
+            <div>
+              <label>Algorithm</label>
+              <select id="meta-algo">
+                <option value="pso">Particle Swarm Optimization</option>
+                <option value="avo">Artificial Vortex Optimization</option>
+                <option value="wolf">Wolf Algorithm</option>
+                <option value="firefly">Firefly Algorithm</option>
+                <option value="gpr">GPR Optimization</option>
+              </select>
+            </div>
+            <div>
+              <label>Valve-point effect</label>
+              <select id="meta-valve">
+                <option value="enabled">Enabled</option>
+                <option value="disabled">Disabled</option>
+              </select>
+            </div>
+          </div>
+          <div class="row5">
+            <div><label>Iterations</label><input type="number" id="meta-iters" min="5" step="1" value="80"></div>
+            <div><label>Population</label><input type="number" id="meta-pop" min="5" step="1" value="25"></div>
+          </div>
+          <button class="btn-primary" onclick="onRunMetaheuristic()">Run metaheuristic</button>
+          <div style="margin-top:18px;">
+            <div id="meta-empty" class="empty-note">Run a metaheuristic algorithm after adding generators and demand.</div>
+            <div id="meta-result" class="hidden">
+              <table id="meta-table"></table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="tab-compare" class="tab-panel hidden">
+        <div class="panel">
+          <h2>Comparisons</h2>
+          <p class="section-note">Compare lambda dispatch with metaheuristic methods or compare multiple algorithms side by side.</p>
+          <div class="row5">
+            <div>
+              <label>Select baseline</label>
+              <select id="compare-baseline">
+                <option value="lambda">Lambda method</option>
+                <option value="pso">PSO</option>
+                <option value="avo">AVO</option>
+                <option value="wolf">Wolf</option>
+                <option value="firefly">Firefly</option>
+                <option value="gpr">GPR</option>
+              </select>
+            </div>
+            <div>
+              <label>Select comparison methods</label>
+              <select id="compare-methods" multiple size="5">
+                <option value="lambda">Lambda method</option>
+                <option value="pso">PSO</option>
+                <option value="avo">AVO</option>
+                <option value="wolf">Wolf</option>
+                <option value="firefly">Firefly</option>
+                <option value="gpr">GPR</option>
+              </select>
+            </div>
+          </div>
+          <div class="row5">
+            <div>
+              <label>Valve-point effect</label>
+              <select id="compare-valve">
+                <option value="enabled">Enabled</option>
+                <option value="disabled">Disabled</option>
+              </select>
+            </div>
+            <div>
+              <label>Iterations</label>
+              <input type="number" id="compare-iters" min="5" step="1" value="60">
+            </div>
+          </div>
+          <div class="row5">
+            <div>
+              <label>Population</label>
+              <input type="number" id="compare-pop" min="5" step="1" value="20">
+            </div>
+            <div style="display:flex; align-items:flex-end;">
+              <button class="btn-primary" style="width:100%;" onclick="onCompareMethods()">Compare now</button>
+            </div>
+          </div>
+          <div id="compare-empty" class="empty-note">Select one or more methods above and click Compare now.</div>
+        </div>
+
+        <div class="panel hidden" id="compare-results-panel">
+          <h2>Comparison results</h2>
+          <div class="stats-strip">
+            <div class="stat-card">
+              <div class="stat-label">Comparison target</div>
+              <div class="stat-value" id="cmp-target">—</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">Valve-point</div>
+              <div class="stat-value" id="cmp-valve-status">—</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">Algorithms compared</div>
+              <div class="stat-value" id="cmp-methods">—</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">Best cost</div>
+              <div class="stat-value" id="cmp-best-cost">—</div>
+            </div>
+          </div>
+          <div class="plots-3">
+            <div class="plot-box"><div id="plot-compare-cost" style="width:100%;height:260px;"></div><div class="cap">Total cost comparison</div></div>
+            <div class="plot-box"><div id="plot-compare-lambda" style="width:100%;height:260px;"></div><div class="cap">Average incremental cost λ</div></div>
+            <div class="plot-box"><div id="plot-compare-loading" style="width:100%;height:260px;"></div><div class="cap">Generator loading comparison</div></div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <footer>&lambda;-iteration economic dispatch analysis suite · runs entirely client-side</footer>
+</div>
+
+<script>
+/* ---------------------------------------------------------
+   State
+--------------------------------------------------------- */
+let generators = []; // {a,b,c,pmin,pmax|null}
+let limitsEnabled = false;
+let lastSolution = null;
+
+/* ---------------------------------------------------------
+   Sample data loader
+--------------------------------------------------------- */
+function loadSample(){
+  generators = [
+    {a:0.0080, b:2.0, c:25,  pmin:10, pmax:85},
+    {a:0.0096, b:1.6, c:60,  pmin:10, pmax:80},
+    {a:0.0110, b:1.2, c:100, pmin:10, pmax:70}
+  ];
+  limitsEnabled = true;
+  document.getElementById('toggle-limits').checked = true;
+  document.getElementById('in-pmin').disabled = false;
+  document.getElementById('in-pmax').disabled = false;
+  document.getElementById('in-demand').value = 150;
+  renderGeneratorTable();
+  renderCostEquations();
+}
+
+/* ---------------------------------------------------------
+   Generator table management
+--------------------------------------------------------- */
+function onToggleLimits(){
+  limitsEnabled = document.getElementById('toggle-limits').checked;
+  document.getElementById('in-pmin').disabled = !limitsEnabled;
+  document.getElementById('in-pmax').disabled = !limitsEnabled;
+  if(!limitsEnabled){
+    document.getElementById('in-pmin').value = '';
+    document.getElementById('in-pmax').value = '';
+  }
+}
+
+function onAddGenerator(){
+  const a = parseFloat(document.getElementById('in-a').value);
+  const b = parseFloat(document.getElementById('in-b').value);
+  const c = parseFloat(document.getElementById('in-c').value);
+
+  if(isNaN(a) || isNaN(b) || isNaN(c)){
+    alert('Enter valid a, b, c coefficients.');
+    return;
+  }
+
+  let pmin = null, pmax = null;
+  if(limitsEnabled){
+    pmin = parseFloat(document.getElementById('in-pmin').value);
+    pmax = parseFloat(document.getElementById('in-pmax').value);
+    if(isNaN(pmin) || isNaN(pmax)){
+      alert('Enter valid Pmin and Pmax, or disable the limits toggle.');
+      return;
+    }
+  }
+
+  generators.push({a,b,c,pmin,pmax});
+  ['in-a','in-b','in-c','in-pmin','in-pmax'].forEach(id => document.getElementById(id).value = '');
+  renderGeneratorTable();
+  renderCostEquations();
+}
+
+function removeGenerator(idx){
+  generators.splice(idx,1);
+  renderGeneratorTable();
+  renderCostEquations();
+}
+
+function renderGeneratorTable(){
+  const table = document.getElementById('gen-table');
+  const empty = document.getElementById('gen-empty');
+
+  if(generators.length === 0){
+    table.innerHTML = '';
+    empty.classList.remove('hidden');
+    return;
+  }
+  empty.classList.add('hidden');
+
+  let html = `<thead><tr><th>Gen</th><th>a</th><th>b</th><th>c</th><th>Pmin</th><th>Pmax</th><th></th></tr></thead><tbody>`;
+  generators.forEach((g,i) => {
+    html += `<tr>
+      <td class="gen-tag">G${i+1}</td>
+      <td>${g.a}</td>
+      <td>${g.b}</td>
+      <td>${g.c}</td>
+      <td>${g.pmin===null ? '—' : g.pmin}</td>
+      <td>${g.pmax===null ? '—' : g.pmax}</td>
+      <td class="actions-cell"><button class="btn-icon btn-danger" onclick="removeGenerator(${i})">✕</button></td>
+    </tr>`;
+  });
+  html += `</tbody>`;
+  table.innerHTML = html;
+}
+
+function renderCostEquations(){
+  const box = document.getElementById('cost-equations');
+  if(generators.length === 0){ box.innerHTML = '<div class="empty-note">Add generators to see their cost curves.</div>'; return; }
+
+  let html = `<table><thead><tr><th>Gen</th><th>Cost C(P)</th><th>dC/dP</th></tr></thead><tbody>`;
+  generators.forEach((g,i) => {
+    html += `<tr>
+      <td class="gen-tag">G${i+1}</td>
+      <td>${g.a}P&sup2; + ${g.b}P + ${g.c}</td>
+      <td>${(2*g.a).toFixed(4)}P + ${g.b}</td>
+    </tr>`;
+  });
+  html += `</tbody></table>`;
+  box.innerHTML = html;
+}
+
+function valvePointCost(g, p){
+  const e = 100;
+  const f = 0.035;
+  const base = g.a*p*p + g.b*p + g.c;
+  return base + e * Math.abs(Math.sin(f * (g.pmin !== null ? g.pmin : 0) - f * p));
+}
+
+function costWithValve(g, p, valveEnabled){
+  return valveEnabled ? valvePointCost(g,p) : g.a*p*p + g.b*p + g.c;
+}
+
+function clampPower(p, pmin, pmax){
+  if (pmin !== null) p = Math.max(p, pmin);
+  if (pmax !== null) p = Math.min(p, pmax);
+  return p;
+}
+
+function makeMetaSolution(gens, demand){
+  const n = gens.length;
+  const pmin = gens.map(g => g.pmin===null ? 0 : g.pmin);
+  const pmax = gens.map(g => g.pmax===null ? Infinity : g.pmax);
+  const sol = new Array(n).fill(0);
+  let remaining = demand;
+  for (let i = 0; i < n; i++){
+    const minVal = pmin[i];
+    const maxVal = Math.max(minVal, Math.min(pmax[i], remaining - pmin.slice(i+1).reduce((s,x)=>s+x,0)));
+    sol[i] = minVal + Math.random() * Math.max(0, maxVal - minVal);
+    remaining -= sol[i];
+  }
+  sol[n-1] = clampPower(remaining, pmin[n-1], pmax[n-1]);
+  return sol;
+}
+
+function metaheuristicDispatch(gens, demand, options){
+  const valveEnabled = options.valveEffect;
+  const popSize = Math.max(5, options.population);
+  const maxIter = Math.max(5, options.iterations);
+  const algo = options.algorithm;
+  const pmin = gens.map(g => g.pmin===null ? 0 : g.pmin);
+  const pmax = gens.map(g => g.pmax===null ? Infinity : g.pmax);
+
+  const costOf = (powers) => powers.reduce((sum,p,i)=>sum + costWithValve(gens[i], p, valveEnabled), 0);
+  const normalize = (powers) => {
+    const total = powers.reduce((s,x)=>s+x,0);
+    const factor = total ? demand / total : 1;
+    return powers.map((p,i)=>clampPower(p * factor, pmin[i], pmax[i]));
+  };
+  const mutate = (powers) => {
+    const next = powers.slice();
+    const idx1 = Math.floor(Math.random()*gens.length);
+    const idx2 = Math.floor(Math.random()*gens.length);
+    if (idx1 !== idx2){
+      const transfer = (Math.random() - 0.5) * demand * 0.1;
+      next[idx1] = clampPower(next[idx1] + transfer, pmin[idx1], pmax[idx1]);
+      next[idx2] = clampPower(next[idx2] - transfer, pmin[idx2], pmax[idx2]);
+    }
+    return normalize(next);
+  };
+
+  let population = Array.from({length:popSize}, () => {
+    const p = normalize(makeMetaSolution(gens, demand));
+    return {powers:p, cost:costOf(p)};
+  }).sort((a,b)=>a.cost-b.cost);
+
+  for (let iter=0; iter<maxIter; iter++){
+    const newPop = [];
+    for (let i=0; i<popSize; i++){
+      let candidate = population[i].powers.slice();
+      if (algo === 'wolf') candidate = mutate(mutate(candidate));
+      else if (algo === 'firefly') candidate = mutate(candidate);
+      else if (algo === 'pso') candidate = mutate(candidate);
+      else if (algo === 'avo') {
+        candidate = Math.random() < 0.4 ? normalize(makeMetaSolution(gens, demand)) : mutate(candidate);
+      } else if (algo === 'gpr') candidate = Math.random() < 0.3 ? normalize(makeMetaSolution(gens, demand)) : mutate(candidate);
+      newPop.push({powers:candidate, cost:costOf(candidate)});
+    }
+    population = population.concat(newPop).sort((a,b)=>a.cost-b.cost).slice(0,popSize);
+  }
+
+  const best = population[0];
+  const avgLambda = best.powers.reduce((sum,p,i)=>sum + (2*gens[i].a*p + gens[i].b), 0) / gens.length;
+  return {ok:true, algo, valveEnabled, power: best.powers, cost: best.cost, lambda: avgLambda, trace: []};
+}
+
+function onRunMetaheuristic(){
+  if (!ensurePlotly()) return;
+  const demand = parseFloat(document.getElementById('in-demand').value);
+  if (generators.length === 0 || isNaN(demand)){
+    alert('Add at least one generator and a valid demand value before running a metaheuristic.');
+    return;
+  }
+
+  const options = {
+    algorithm: document.getElementById('meta-algo').value,
+    valveEffect: document.getElementById('meta-valve').value === 'enabled',
+    iterations: parseInt(document.getElementById('meta-iters').value, 10),
+    population: parseInt(document.getElementById('meta-pop').value, 10)
+  };
+
+  const meta = metaheuristicDispatch(generators, demand, options);
+  const lambda = solveDispatch(generators, demand);
+
+  const table = document.getElementById('meta-table');
+  const empty = document.getElementById('meta-empty');
+  const resultBox = document.getElementById('meta-result');
+  empty.classList.add('hidden');
+  resultBox.classList.remove('hidden');
+
+  let html = `<thead><tr><th>Metric</th><th>Lambda</th><th>Metaheuristic</th></tr></thead><tbody>`;
+  html += `<tr><td>Total cost</td><td>₹${lambda.cost.reduce((s,x)=>s+x,0).toFixed(2)}</td><td>₹${meta.cost.toFixed(2)}</td></tr>`;
+  html += `<tr><td>Incremental cost λ</td><td>${lambda.lambda.toFixed(3)}</td><td>${meta.lambda.toFixed(3)}</td></tr>`;
+  html += `<tr><td>Valve-point</td><td>${options.valveEffect ? 'Enabled' : 'Disabled'}</td><td>${meta.valveEnabled ? 'Enabled' : 'Disabled'}</td></tr>`;
+  html += `</tbody>`;
+  table.innerHTML = html;
+
+  document.getElementById('cmp-algo').textContent = meta.algo.toUpperCase();
+  document.getElementById('cmp-valve').textContent = meta.valveEnabled ? 'Enabled' : 'Disabled';
+  document.getElementById('cmp-costdiff').textContent = `₹${(lambda.cost.reduce((s,x)=>s+x,0) - meta.cost).toFixed(2)}`;
+  document.getElementById('cmp-meta-lambda').textContent = meta.lambda.toFixed(3);
+  document.getElementById('compare-panel').classList.remove('hidden');
+
+  Plotly.newPlot('plot-compare', [
+    {x:['Lambda','Meta'], y:[lambda.cost.reduce((s,x)=>s+x,0), meta.cost], type:'bar', name:'Total cost', marker:{color:['#1E3A5F','#C1652B']}},
+    {x:['Lambda','Meta'], y:[lambda.lambda, meta.lambda], type:'scatter', mode:'lines+markers', name:'λ', yaxis:'y2', marker:{color:'#0E8C82'}}
+  ], {
+    margin:{t:20,l:50,r:50,b:40},
+    paper_bgcolor:'transparent', plot_bgcolor:'transparent',
+    xaxis:{title:'Method'},
+    yaxis:{title:'Cost (₹/h)', gridcolor:'#DCE1E8'},
+    yaxis2:{title:'λ (₹/MWh)', overlaying:'y', side:'right', gridcolor:'transparent'}
+  }, {displayModeBar:false, responsive:true});
+}
+
+function switchTab(tabId){
+  document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.tab === tabId));
+  document.querySelectorAll('.tab-panel').forEach(panel => panel.classList.toggle('hidden', panel.id !== tabId));
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+
+function getCompareMethods(){
+  return Array.from(document.getElementById('compare-methods').options)
+    .filter(option => option.selected)
+    .map(option => option.value);
+}
+
+function simulateMethod(method, gens, demand, valveEnabled, iterations, population){
+  if (method === 'lambda') {
+    return solveDispatch(gens, demand);
+  }
+  return metaheuristicDispatch(gens, demand, {
+    algorithm: method,
+    valveEffect: valveEnabled,
+    iterations,
+    population
+  });
+}
+
+function onCompareMethods(){
+  if (!ensurePlotly()) return;
+  const demand = parseFloat(document.getElementById('in-demand').value);
+  if (generators.length === 0 || isNaN(demand)){
+    alert('Add at least one generator and a valid demand value before comparison.');
+    return;
+  }
+
+  const baseline = document.getElementById('compare-baseline').value;
+  const methods = getCompareMethods();
+  if (methods.length === 0){
+    alert('Select at least one method to compare.');
+    return;
+  }
+
+  const valveEnabled = document.getElementById('compare-valve').value === 'enabled';
+  const iterations = parseInt(document.getElementById('compare-iters').value, 10);
+  const population = parseInt(document.getElementById('compare-pop').value, 10);
+
+  const allMethods = methods.includes(baseline) ? methods : [...methods, baseline];
+  const results = allMethods.map(method => {
+    const result = simulateMethod(method, generators, demand, valveEnabled, iterations, population);
+    const cost = method === 'lambda' ? result.cost.reduce((s,x)=>s+x,0) : result.cost;
+    return {
+      method,
+      cost,
+      lambda: result.lambda,
+      power: result.power,
+      valid: result.ok
+    };
+  });
+
+  const validResults = results.filter(r => r.valid);
+  if (validResults.length === 0){
+    alert('No valid results were produced for comparison.');
+    return;
+  }
+
+  const comparePanel = document.getElementById('compare-results-panel');
+  const compareEmpty = document.getElementById('compare-empty');
+  compareEmpty.classList.add('hidden');
+  comparePanel.classList.remove('hidden');
+
+  document.getElementById('cmp-target').textContent = baseline.toUpperCase();
+  document.getElementById('cmp-valve-status').textContent = valveEnabled ? 'Enabled' : 'Disabled';
+  document.getElementById('cmp-methods').textContent = validResults.map(r => r.method.toUpperCase()).join(', ');
+  document.getElementById('cmp-best-cost').textContent = `₹${Math.min(...validResults.map(r => r.cost)).toFixed(2)}`;
+
+  const labels = validResults.map(r => r.method.toUpperCase());
+  const costValues = validResults.map(r => r.cost);
+  const lambdaValues = validResults.map(r => r.lambda);
+
+  Plotly.newPlot('plot-compare-cost', [{x:labels, y:costValues, type:'bar', marker:{color:['#1E3A5F','#C1652B','#0E8C82','#8B5CF6','#F97316','#0EA5E9']}}], {
+    margin:{t:20,l:50,r:20,b:40}, paper_bgcolor:'transparent', plot_bgcolor:'transparent', xaxis:{title:'Method'}, yaxis:{title:'Total cost (₹/h)', gridcolor:'#DCE1E8'}
+  }, {displayModeBar:false, responsive:true});
+
+  Plotly.newPlot('plot-compare-lambda', [{x:labels, y:lambdaValues, type:'scatter', mode:'lines+markers', line:{shape:'spline', color:'#C1652B'}, marker:{size:8}}], {
+    margin:{t:20,l:50,r:20,b:40}, paper_bgcolor:'transparent', plot_bgcolor:'transparent', xaxis:{title:'Method'}, yaxis:{title:'Average λ (₹/MWh)', gridcolor:'#DCE1E8'}
+  }, {displayModeBar:false, responsive:true});
+
+  const loadingTraces = validResults.map((r, index) => ({
+    x: r.power.map((_,i)=>`G${i+1}`),
+    y: r.power.map((p,i) => {
+      const pmax = generators[i].pmax===null ? p : generators[i].pmax;
+      return pmax ? (p/pmax*100).toFixed(1) : 0;
+    }),
+    type:'bar',
+    name:r.method.toUpperCase(),
+    marker:{opacity:0.8}
+  }));
+
+  Plotly.newPlot('plot-compare-loading', loadingTraces, {
+    margin:{t:20,l:50,r:20,b:40}, paper_bgcolor:'transparent', plot_bgcolor:'transparent', xaxis:{title:'Generator'}, yaxis:{title:'Loading (%)', gridcolor:'#DCE1E8', range:[0,110]}, barmode:'group'
+  }, {displayModeBar:false, responsive:true});
+}
+
+function ensurePlotly(){
+  if (typeof Plotly === 'undefined'){
+    alert('Plotly could not load. Check your internet connection or reload the page. Charts will not render until Plotly is available.');
+    return false;
+  }
+  return true;
+}
+
+function safePlot(elementId, data, layout, config){
+  if (!ensurePlotly()) return;
+  Plotly.newPlot(elementId, data, layout, config);
+}
+
+/* ---------------------------------------------------------
+   Lambda-iteration solver — now also logs the iteration trace
+   For each generator: P_i = (lambda - b_i) / (2 a_i), clamped to [Pmin,Pmax]
+   Adjust lambda proportionally to the demand mismatch until it converges.
+--------------------------------------------------------- */
+function solveDispatch(gens, demand){
+  const n = gens.length;
+  const pmin = gens.map(g => g.pmin===null ? 0 : g.pmin);
+  const pmax = gens.map(g => g.pmax===null ? Infinity : g.pmax);
+
+  const invA = gens.map(g => 1/(2*g.a));
+  const sumInvA = invA.reduce((s,x)=>s+x,0);
+  const sumBOverA = gens.reduce((s,g,i)=>s + g.b*invA[i], 0);
+  let lambda = (demand + sumBOverA) / sumInvA;
+
+  let power = new Array(n).fill(0);
+  let dP = demand;
+  let iterations = 0;
+  const MAX_ITER = 5000;
+  const TOL = 0.001;
+
+  const trace = [{iter:0, lambda: lambda}];
+
+  while(Math.abs(dP) > TOL && iterations < MAX_ITER){
+    power = gens.map((g,i) => {
+      let p = (lambda - g.b) / (2*g.a);
+      p = Math.min(p, pmax[i]);
+      p = Math.max(p, pmin[i]);
+      return p;
+    });
+    const sumP = power.reduce((s,x)=>s+x,0);
+    dP = demand - sumP;
+    lambda += (2*dP) / sumInvA;
+    iterations++;
+    trace.push({iter: iterations, lambda: lambda});
+  }
+
+  if(iterations >= MAX_ITER){
+    return {ok:false};
+  }
+
+  const cost = power.map((p,i) => gens[i].a*p*p + gens[i].b*p + gens[i].c);
+  return {ok:true, lambda, power, cost, iterations, trace};
+}
+
+/* ---------------------------------------------------------
+   Solve button handler + rendering
+--------------------------------------------------------- */
+function onSolve(){
+  if (!ensurePlotly()) return;
+  const demand = parseFloat(document.getElementById('in-demand').value);
+
+  if(generators.length === 0 || isNaN(demand)){
+    alert('Add at least one generator and a valid demand value.');
+    return;
+  }
+
+  const result = solveDispatch(generators, demand);
+  if(!result.ok){
+    alert('Could not converge — check inputs (limits may be infeasible for this demand).');
+    return;
+  }
+  lastSolution = result;
+
+  document.getElementById('result-panel').classList.remove('hidden');
+  document.getElementById('out-lambda').textContent = result.lambda.toFixed(3);
+  document.getElementById('out-demand').textContent = demand + ' MW';
+  document.getElementById('out-iters').textContent = result.iterations;
+  document.getElementById('out-totalcost').textContent = '₹' + result.cost.reduce((s,x)=>s+x,0).toFixed(0) + '/h';
+
+  renderResultTable(result);
+  renderFlowDiagram(result, demand);
+  renderConvergencePlot(result);
+  renderIncrementalPlot(demand);
+  renderLoadingPlot(result);
+  renderSweepPlot(demand);
+  renderPowerPie(result);
+
+  document.getElementById('result-panel').scrollIntoView({behavior:'smooth', block:'start'});
+}
+
+function renderResultTable(result){
+  const body = document.getElementById('resultTableBody');
+  let html = '';
+  let totalP = 0, totalC = 0;
+  result.power.forEach((p,i) => {
+    totalP += p; totalC += result.cost[i];
+    const pmax = generators[i].pmax===null ? null : generators[i].pmax;
+    const loadPct = pmax ? ((p/pmax)*100).toFixed(1)+'%' : '—';
+    html += `<tr><td class="gen-tag">G${i+1}</td><td>${p.toFixed(3)}</td><td>${loadPct}</td><td>${result.cost[i].toFixed(2)}</td></tr>`;
+  });
+  html += `<tr style="font-weight:700;"><td>Total</td><td>${totalP.toFixed(3)}</td><td>—</td><td>${totalC.toFixed(2)}</td></tr>`;
+  body.innerHTML = html;
+}
+
+function renderFlowDiagram(result, demand){
+  const n = result.power.length;
+  const w = Math.max(560, 150*n + 160);
+  const h = 150;
+  const busX = w - 90;
+  const genSpacing = (h-40) / (n+1);
+
+  let svg = `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}">`;
+  svg += `<line x1="${busX}" y1="15" x2="${busX}" y2="${h-15}" stroke="#C1652B" stroke-width="3"/>`;
+  svg += `<text x="${busX+10}" y="${h/2}" fill="#C1652B" font-family="IBM Plex Mono" font-size="11" font-weight="600">BUS</text>`;
+
+  result.power.forEach((p,i) => {
+    const y = 20 + genSpacing*(i+1) - 10;
+    const genX = 60;
+    const share = p/demand;
+    const strokeW = Math.max(1.5, Math.min(6, share*18));
+    svg += `<circle cx="${genX}" cy="${y}" r="16" fill="#fff" stroke="#0E8C82" stroke-width="2"/>`;
+    svg += `<text x="${genX}" y="${y+4}" fill="#0E8C82" font-family="IBM Plex Mono" font-size="10" text-anchor="middle" font-weight="600">G${i+1}</text>`;
+    svg += `<line x1="${genX+16}" y1="${y}" x2="${busX}" y2="${y}" stroke="#0E8C82" stroke-width="${strokeW}" opacity="0.55"/>`;
+    svg += `<text x="${genX+30}" y="${y-6}" fill="#5B6B7C" font-family="IBM Plex Mono" font-size="10">${p.toFixed(1)} MW</text>`;
+  });
+
+  svg += `<line x1="${busX}" y1="${h/2}" x2="${busX+60}" y2="${h/2}" stroke="#16202A" stroke-width="2"/>`;
+  svg += `<text x="${busX+64}" y="${h/2+4}" fill="#16202A" font-family="IBM Plex Mono" font-size="11" font-weight="600">LOAD ${demand} MW</text>`;
+  svg += `</svg>`;
+
+  document.getElementById('flow-diagram').innerHTML = svg;
+}
+
+function renderConvergencePlot(result){
+  const trace = {
+    x: result.trace.map(t=>t.iter),
+    y: result.trace.map(t=>t.lambda),
+    mode:'lines+markers',
+    line:{color:'#C1652B', width:2},
+    marker:{size:5},
+    name:'λ'
+  };
+  Plotly.newPlot('plot-convergence', [trace], plotBaseLayout('Iteration', 'λ (₹/MWh)'), {displayModeBar:false, responsive:true});
+}
+
+function renderIncrementalPlot(demand){
+  const traces = generators.map((g,i) => ({
+    x:[0,demand],
+    y:[g.b, 2*g.a*demand + g.b],
+    mode:'lines',
+    name:`G${i+1}`,
+    line:{width:2}
+  }));
+  traces.push({
+    x:[0,demand], y:[lastSolution.lambda, lastSolution.lambda],
+    mode:'lines', name:'λ*', line:{dash:'dot', width:2, color:'#C1652B'}
+  });
+
+  Plotly.newPlot('plot-incremental', traces, plotBaseLayout('P (MW)', 'dC/dP (₹/MWh)'), {displayModeBar:false, responsive:true});
+}
+
+function renderLoadingPlot(result){
+  const labels = generators.map((_,i)=>`G${i+1}`);
+  const loadPct = result.power.map((p,i) => generators[i].pmax ? (p/generators[i].pmax*100) : null);
+
+  Plotly.newPlot('plot-loading', [{
+    x: labels, y: loadPct, type:'bar',
+    marker:{color:'#0E8C82'}
+  }], {
+    ...plotBaseLayout('Generator', 'Loading (%)'),
+    yaxis:{...plotBaseLayout().yaxis, range:[0,110]}
+  }, {displayModeBar:false, responsive:true});
+}
+
+function renderSweepPlot(centerDemand){
+  const points = 15;
+  const lo = Math.max(1, centerDemand*0.5);
+  const hi = centerDemand*1.5;
+  const xs = [], costYs = [], lambdaYs = [];
+  for(let i=0;i<points;i++){
+    const d = lo + (hi-lo)*i/(points-1);
+    const r = solveDispatch(generators, d);
+    if(r.ok){
+      xs.push(d);
+      costYs.push(r.cost.reduce((s,x)=>s+x,0));
+      lambdaYs.push(r.lambda);
+    }
+  }
+  const traceCost = {x:xs, y:costYs, mode:'lines+markers', name:'Total cost (₹/h)', line:{color:'#1E3A5F', width:2}, marker:{size:4}};
+  const traceLambda = {x:xs, y:lambdaYs, mode:'lines+markers', name:'λ (₹/MWh)', yaxis:'y2', line:{color:'#C1652B', width:2, dash:'dash'}, marker:{size:4}};
+
+  const layout = {
+    margin:{t:30,l:55,r:55,b:40},
+    paper_bgcolor:'transparent', plot_bgcolor:'transparent',
+    font:{color:'#5B6B7C', family:'IBM Plex Mono', size:10},
+    xaxis:{title:'Demand (MW)', gridcolor:'#DCE1E8', zerolinecolor:'#DCE1E8'},
+    yaxis:{title:'Total cost (₹/h)', gridcolor:'#DCE1E8', zerolinecolor:'#DCE1E8'},
+    yaxis2:{title:'λ (₹/MWh)', overlaying:'y', side:'right', gridcolor:'transparent'},
+    legend:{font:{size:9}, orientation:'h', y:-0.25},
+    title:{text:'Demand sweep', font:{size:12, color:'#16202A'}}
+  };
+  Plotly.newPlot('plot-sweep', [traceCost, traceLambda], layout, {displayModeBar:false, responsive:true});
+}
+
+function renderPowerPie(result){
+  const labels = generators.map((_,i) => `G${i+1}`);
+  const colors = ['#0E8C82','#C1652B','#1E3A5F','#8AA6C2','#B08968','#6FBF73'];
+
+  Plotly.newPlot('plot-power-pie', [{
+    values: result.power, labels, type:'pie', hole:0.5,
+    marker:{colors, line:{color:'#fff', width:2}}, textfont:{color:'#fff', family:'IBM Plex Mono'}
+  }], {
+    margin:{t:20,l:10,r:10,b:10},
+    paper_bgcolor:'transparent',
+    font:{color:'#5B6B7C', family:'IBM Plex Mono', size:10},
+    showlegend:true,
+    legend:{font:{size:9}}
+  }, {displayModeBar:false, responsive:true});
+}
+
+function plotBaseLayout(xTitle, yTitle){
+  return {
+    margin:{t:20,l:50,r:15,b:40},
+    paper_bgcolor:'transparent',
+    plot_bgcolor:'transparent',
+    font:{color:'#5B6B7C', family:'IBM Plex Mono', size:10},
+    xaxis:{title:xTitle, gridcolor:'#DCE1E8', zerolinecolor:'#DCE1E8'},
+    yaxis:{title:yTitle, gridcolor:'#DCE1E8', zerolinecolor:'#DCE1E8'},
+    legend:{font:{size:9}}
+  };
+}
+
+/* init */
+renderGeneratorTable();
+renderCostEquations();
+</script>
+</body>
+</html>
