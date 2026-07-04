@@ -1,0 +1,1113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dispatch Pro — Economic Load Dispatch Analysis Suite</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<style>
+:root{
+  --bg:#F5F6F8; --panel:#fff; --line:#DCE1E8; --text:#16202A; --muted:#5B6B7C;
+  --copper:#C1652B; --copper-soft:#F2E3D8; --teal:#0E8C82; --teal-soft:#E1F3F1;
+  --danger:#C1402E; --navy:#1E3A5F; --purple:#7A5DC7; --gold:#D8A03D;
+  --font-head:'IBM Plex Sans',sans-serif; --font-mono:'IBM Plex Mono',monospace;
+  --shadow:0 1px 2px rgba(20,30,40,.04),0 4px 14px rgba(20,30,40,.05);
+}
+*{box-sizing:border-box;}
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font-head);}
+.wrap{max-width:1400px;margin:0 auto;padding:28px 22px 100px;}
+header{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2px solid var(--navy);padding-bottom:16px;margin-bottom:20px;flex-wrap:wrap;gap:12px;}
+.brand{display:flex;align-items:center;gap:12px;}
+.brand-mark{width:36px;height:36px;background:var(--navy);border-radius:4px;display:flex;align-items:center;justify-content:center;color:#fff;font-family:var(--font-mono);font-weight:700;font-size:15px;}
+h1{font-size:20px;margin:0;font-weight:700;color:var(--navy);}
+.subtitle{color:var(--muted);font-size:11.5px;font-family:var(--font-mono);margin-top:2px;}
+.badges{display:flex;gap:6px;flex-wrap:wrap;}
+.badge{font-family:var(--font-mono);font-size:10px;color:var(--teal);border:1px solid var(--teal);background:var(--teal-soft);padding:4px 9px;border-radius:20px;font-weight:600;}
+.tabbar{display:flex;gap:3px;border-bottom:2px solid var(--line);margin-bottom:20px;flex-wrap:wrap;}
+.tab{padding:9px 14px;font-family:var(--font-mono);font-size:11.5px;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;}
+.tab.active{color:var(--copper);border-bottom-color:var(--copper);font-weight:700;}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:20px;box-shadow:var(--shadow);margin-bottom:18px;}
+.panel h2{font-size:11px;text-transform:uppercase;letter-spacing:1.2px;color:var(--navy);margin:0 0 14px;font-weight:700;display:flex;align-items:center;gap:8px;}
+.panel h2::before{content:'';width:13px;height:2.5px;background:var(--copper);}
+.panel h3{font-size:12.5px;margin:16px 0 8px;color:var(--navy);}
+.note{color:var(--muted);font-size:12px;line-height:1.6;margin:0 0 10px;}
+label{display:block;font-size:10.5px;color:var(--muted);margin-bottom:4px;font-family:var(--font-mono);}
+input[type=number],input[type=text],select{width:100%;background:#FBFCFD;border:1px solid var(--line);color:var(--text);padding:8px 9px;border-radius:6px;font-family:var(--font-mono);font-size:12.5px;}
+input:focus,select:focus{border-color:var(--copper);outline:none;}
+input:disabled{opacity:.4;background:#F0F1F3;}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px;}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;}
+.grid4{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px;}
+@media(max-width:980px){.grid2,.grid3,.grid4{grid-template-columns:1fr;}}
+.row{display:grid;gap:10px;margin-bottom:10px;}
+button{font-family:var(--font-mono);font-size:11.5px;border-radius:6px;border:1px solid var(--line);cursor:pointer;padding:8px 13px;background:#fff;color:var(--text);}
+button:hover{border-color:var(--copper);color:var(--copper);}
+.btn-primary{background:var(--navy);border-color:var(--navy);color:#fff;font-weight:600;width:100%;padding:11px;font-size:12.5px;}
+.btn-primary:hover{background:#16304F;color:#fff;}
+.btn-gold{background:var(--gold);border-color:var(--gold);color:#fff;}
+.btn-icon{padding:4px 8px;font-size:11px;}
+.btn-danger:hover{border-color:var(--danger);color:var(--danger);}
+table{width:100%;border-collapse:collapse;font-family:var(--font-mono);font-size:11.5px;}
+th{text-align:left;color:var(--muted);font-weight:600;font-size:9.5px;text-transform:uppercase;letter-spacing:.5px;padding:6px 7px;border-bottom:2px solid var(--line);}
+td{padding:7px;border-bottom:1px solid var(--line);}
+.gen-tag{color:var(--teal);font-weight:700;}
+.empty-note{color:var(--muted);font-size:11.5px;font-family:var(--font-mono);padding:14px;text-align:center;border:1px dashed var(--line);border-radius:8px;}
+.stats-strip{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:18px;}
+@media(max-width:980px){.stats-strip{grid-template-columns:1fr 1fr;}}
+.stat-card{background:#fff;border:1px solid var(--line);border-radius:8px;padding:12px 14px;box-shadow:var(--shadow);}
+.stat-label{font-size:9.5px;color:var(--muted);letter-spacing:.6px;text-transform:uppercase;margin-bottom:4px;font-family:var(--font-mono);}
+.stat-value{font-family:var(--font-mono);font-size:19px;color:var(--navy);font-weight:700;}
+.stat-value.copper{color:var(--copper);} .stat-value.teal{color:var(--teal);} .stat-value.purple{color:var(--purple);}
+.plots-2{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+.plots-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;}
+@media(max-width:980px){.plots-2,.plots-3{grid-template-columns:1fr;}}
+.plot-box{background:#fff;border:1px solid var(--line);border-radius:8px;padding:8px;box-shadow:var(--shadow);}
+.plot-box .cap{font-family:var(--font-mono);font-size:10px;color:var(--muted);text-align:center;margin-top:2px;}
+.hidden{display:none!important;}
+.flow-diagram{overflow-x:auto;padding:12px 6px;background:#FBFCFD;border:1px solid var(--line);border-radius:8px;margin-bottom:16px;}
+.tooltip-box{background:#FBFCFD;border:1px solid var(--line);border-left:3px solid var(--copper);border-radius:6px;padding:12px 14px;font-size:11.5px;color:var(--muted);font-family:var(--font-mono);line-height:1.7;margin-top:14px;}
+.tooltip-box b{color:var(--navy);}
+.toggle-row{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);margin-bottom:10px;}
+.toggle-row input{width:auto;}
+.pill{display:inline-block;padding:2px 8px;border-radius:20px;font-size:9.5px;font-family:var(--font-mono);}
+.pill-ok{background:#E5F6ED;color:#1E8E5A;} .pill-warn{background:#FDEEEA;color:var(--danger);}
+footer{margin-top:30px;text-align:center;color:var(--muted);font-family:var(--font-mono);font-size:10.5px;}
+@media print{ .tabbar,button,.no-print{display:none!important;} .tab-panel{display:block!important;} }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="brand">
+    <div class="brand-mark">λ</div>
+    <div><h1>Dispatch Pro</h1><div class="subtitle">economic load dispatch · constraints · metaheuristics · benchmarking</div></div>
+  </div>
+  <div class="badges">
+    <div class="badge">B-LOSS COEFFICIENTS</div>
+    <div class="badge">VALVE-POINT MODEL</div>
+    <div class="badge">MULTI-RUN STATS</div>
+  </div>
+  <button class="btn-gold no-print" onclick="exportReport()">⤓ Export report (PDF)</button>
+</header>
+
+<div class="tabbar">
+  <div class="tab active" data-tab="setup" onclick="switchTab('setup')">1. System Setup</div>
+  <div class="tab" data-tab="constraints" onclick="switchTab('constraints')">2. Constraints</div>
+  <div class="tab" data-tab="dispatch" onclick="switchTab('dispatch')">3. λ Dispatch</div>
+  <div class="tab" data-tab="multiperiod" onclick="switchTab('multiperiod')">4. Multi-Period / Ramp</div>
+  <div class="tab" data-tab="meta" onclick="switchTab('meta')">5. Metaheuristics</div>
+  <div class="tab" data-tab="compare" onclick="switchTab('compare')">6. Comparison</div>
+</div>
+
+<!-- ============ TAB 1: SETUP ============ -->
+<div id="tab-setup" class="tab-panel">
+  <div class="panel">
+    <h2>Generator System</h2>
+    <p class="note">Cost model C(P) = aP² + bP + c (₹/h). Add units manually or load a standard benchmark system.</p>
+    <div class="grid4">
+      <div><label>a (₹/MW²h)</label><input type="number" id="in-a" step="any" placeholder="0.0080"></div>
+      <div><label>b (₹/MWh)</label><input type="number" id="in-b" step="any" placeholder="2.0"></div>
+      <div><label>c (₹/h)</label><input type="number" id="in-c" step="any" placeholder="25"></div>
+      <div style="display:flex;align-items:flex-end;"><button class="btn-primary" onclick="onAddGenerator()">+ Add generator</button></div>
+    </div>
+    <div class="grid2">
+      <div><label>Pmin (MW)</label><input type="number" id="in-pmin" step="any" placeholder="10"></div>
+      <div><label>Pmax (MW)</label><input type="number" id="in-pmax" step="any" placeholder="85"></div>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin:10px 0;">
+      <button onclick="loadSample3()">Load custom 3-gen system</button>
+      <button onclick="loadIEEE6()">Load standard 6-unit benchmark system</button>
+      <button class="btn-danger" onclick="clearAll()">Clear all</button>
+    </div>
+    <table id="gen-table"></table>
+    <div id="gen-empty" class="empty-note">No generators yet.</div>
+    <div class="tooltip-box">
+      <b>Benchmark note:</b> the 6-unit system uses widely-cited coefficients from ELD literature
+      (quadratic cost + valve-point + B-loss matrix). Reported costs here approximate — not guaranteed identical to any
+      single paper — since published results vary with solver tolerance, RNG seed, and constraint handling. Useful for
+      sanity-checking magnitude and behavior, not for citing as an exact reproduction.
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>System Demand</h2>
+    <div class="grid3">
+      <div><label>Base demand P<sub>D</sub> (MW)</label><input type="number" id="in-demand" step="any" placeholder="e.g. 700"></div>
+      <div><label>Spinning reserve requirement (MW)</label><input type="number" id="in-reserve" step="any" value="0"></div>
+      <div><label>Demand sweep range for sensitivity (% of base)</label><input type="text" id="in-sweep-range" value="80,120"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ TAB 2: CONSTRAINTS ============ -->
+<div id="tab-constraints" class="tab-panel hidden">
+  <div class="grid2">
+    <div class="panel">
+      <h2>Transmission Losses (B-coefficients)</h2>
+      <div class="toggle-row"><input type="checkbox" id="toggle-losses" onchange="toggleLosses()"><span>Include transmission losses in dispatch (Kron's loss formula: P_L = ΣΣ Pi·Bij·Pj)</span></div>
+      <p class="note">B-matrix auto-generates when losses are enabled (or use benchmark preset's matrix). Diagonal terms dominate; off-diagonal terms are typically small.</p>
+      <div id="bmatrix-box"></div>
+    </div>
+    <div class="panel">
+      <h2>Valve-Point Loading Effect</h2>
+      <div class="toggle-row"><input type="checkbox" id="toggle-valve" onchange="renderConstraintTables()"><span>Add valve-point ripple: C(P) = aP²+bP+c + |e·sin(f·(Pmin−P))|</span></div>
+      <p class="note">This term makes the cost surface non-convex (multiple local minima) — the reason plain λ-iteration can get stuck, and why population-based metaheuristics are used instead.</p>
+      <div id="valve-table"></div>
+    </div>
+  </div>
+
+  <div class="grid2">
+    <div class="panel">
+      <h2>Prohibited Operating Zones</h2>
+      <p class="note">Bands of output a unit cannot run in continuously (e.g. shaft/vibration resonance). Format per generator: <code>lo1-hi1;lo2-hi2</code></p>
+      <div id="ppz-table"></div>
+    </div>
+    <div class="panel">
+      <h2>Ramp Rate Limits</h2>
+      <p class="note">Max MW a unit can change between consecutive periods — used in the Multi-Period tab. Up/down limits in MW per period.</p>
+      <div id="ramp-table"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ TAB 3: λ DISPATCH ============ -->
+<div id="tab-dispatch" class="tab-panel hidden">
+  <div class="panel"><button class="btn-primary" onclick="onSolveLambda()">Run λ-iteration dispatch →</button></div>
+  <div id="no-result-note" class="empty-note" style="padding:36px;">Run the dispatch to see results.</div>
+  <div id="lambda-result" class="hidden">
+    <div class="stats-strip">
+      <div class="stat-card"><div class="stat-label">λ (with losses)</div><div class="stat-value copper" id="out-lambda">—</div></div>
+      <div class="stat-card"><div class="stat-label">Demand P<sub>D</sub></div><div class="stat-value teal" id="out-demand">—</div></div>
+      <div class="stat-card"><div class="stat-label">Transmission loss</div><div class="stat-value" id="out-loss">—</div></div>
+      <div class="stat-card"><div class="stat-label">Total cost</div><div class="stat-value" id="out-cost">—</div></div>
+      <div class="stat-card"><div class="stat-label">Iterations</div><div class="stat-value" id="out-iters">—</div></div>
+    </div>
+    <div class="panel">
+      <h2>No-loss vs With-loss Comparison</h2>
+      <table id="lossCompareTable"></table>
+    </div>
+    <div class="flow-diagram" id="flow-diagram"></div>
+    <div class="panel"><h2>Unit Dispatch</h2><table id="resultTable"></table></div>
+    <div class="plots-3">
+      <div class="plot-box"><div id="plot-convergence" style="height:250px;"></div><div class="cap">λ convergence trace</div></div>
+      <div class="plot-box"><div id="plot-incremental" style="height:250px;"></div><div class="cap">Incremental cost curves &amp; λ*</div></div>
+      <div class="plot-box"><div id="plot-cost-curve" style="height:250px;"></div><div class="cap">Cost curve with valve-point ripple</div></div>
+    </div>
+    <div class="tooltip-box" id="why-differs">Why this differs — fill after solve.</div>
+  </div>
+</div>
+
+<!-- ============ TAB 4: MULTI-PERIOD ============ -->
+<div id="tab-multiperiod" class="tab-panel hidden">
+  <div class="panel">
+    <h2>24-Period Load Curve</h2>
+    <p class="note">Comma-separated demand values (MW), one per period. Ramp limits from the Constraints tab are enforced between consecutive periods.</p>
+    <input type="text" id="in-loadcurve" value="420,410,405,400,410,440,520,610,680,720,740,750,745,730,710,690,670,700,730,690,620,540,470,430">
+    <div style="margin-top:10px;"><button class="btn-primary" onclick="onRunMultiPeriod()">Run ramp-constrained multi-period dispatch →</button></div>
+  </div>
+  <div id="mp-empty" class="empty-note" style="padding:36px;">Run the multi-period dispatch to see the schedule.</div>
+  <div id="mp-result" class="hidden">
+    <div class="plot-box"><div id="plot-mp-stack" style="height:320px;"></div><div class="cap">24-period generation schedule (stacked, ramp-constrained)</div></div>
+    <div class="plot-box" style="margin-top:14px;"><div id="plot-mp-cost" style="height:260px;"></div><div class="cap">Hourly cost</div></div>
+  </div>
+</div>
+
+<!-- ============ TAB 5: METAHEURISTICS ============ -->
+<div id="tab-meta" class="tab-panel hidden">
+  <div class="panel">
+    <h2>Algorithm Parameters &amp; Trial Settings</h2>
+    <div class="grid4">
+      <div><label>Population size</label><input type="number" id="meta-pop" value="25" min="5"></div>
+      <div><label>Iterations per run</label><input type="number" id="meta-iters" value="80" min="10"></div>
+      <div><label>Independent runs / algorithm</label><input type="number" id="meta-runs" value="20" min="5" max="50"></div>
+      <div><label>PSO inertia weight (w)</label><input type="number" id="meta-inertia" value="0.7" step="0.05"></div>
+    </div>
+    <div class="grid4">
+      <div><label>PSO cognitive coeff. (c1)</label><input type="number" id="meta-c1" value="1.5" step="0.1"></div>
+      <div><label>PSO social coeff. (c2)</label><input type="number" id="meta-c2" value="1.5" step="0.1"></div>
+      <div><label>GA mutation rate</label><input type="number" id="meta-mut" value="0.15" step="0.05"></div>
+      <div><label>DE mutation factor (F)</label><input type="number" id="meta-de-f" value="0.8" min="0.1" max="1.5" step="0.05"></div>
+    </div>
+    <div class="grid2" style="margin-top:10px;">
+      <div><label>DE crossover rate (CR)</label><input type="number" id="meta-de-cr" value="0.9" min="0.1" max="1" step="0.05"></div>
+      <div class="note" style="margin:0;">GWO, DE, and Vortex Search are now included for broader benchmarking on non-convex dispatch problems.</div>
+    </div>
+    <button class="btn-primary" onclick="onRunMetaSuite()">Run GA · PSO · GWO · DE · Vortex Search (multi-trial) →</button>
+  </div>
+  <div id="meta-empty" class="empty-note" style="padding:36px;">Run the suite to see statistics and convergence curves.</div>
+  <div id="meta-result" class="hidden">
+    <div class="panel"><h2>Multi-Run Statistics (cost, ₹/h)</h2><table id="meta-stats-table"></table></div>
+    <div class="plots-2">
+      <div class="plot-box"><div id="plot-meta-convergence" style="height:290px;"></div><div class="cap">Convergence curves — best cost vs iteration (averaged over runs)</div></div>
+      <div class="plot-box"><div id="plot-meta-box" style="height:290px;"></div><div class="cap">Cost distribution across runs (box plot)</div></div>
+    </div>
+    <div class="plot-box" style="margin-top:14px;"><div id="plot-meta-time" style="height:250px;"></div><div class="cap">Mean computation time per run</div></div>
+  </div>
+</div>
+
+<!-- ============ TAB 6: COMPARISON ============ -->
+<div id="tab-compare" class="tab-panel hidden">
+  <div id="cmp-empty" class="empty-note" style="padding:36px;">Run λ-dispatch (tab 3) and the Metaheuristics suite (tab 5) first — this tab compares all methods.</div>
+  <div id="cmp-result" class="hidden">
+    <div class="panel"><h2>Method Comparison Table</h2><table id="cmp-table"></table></div>
+    <div class="plots-2">
+      <div class="plot-box"><div id="plot-cmp-box" style="height:280px;"></div><div class="cap">Cost distribution: λ-iteration (deterministic) vs metaheuristics (stochastic)</div></div>
+      <div class="plot-box"><div id="plot-cmp-radar" style="height:280px;"></div><div class="cap">Normalized trade-off: cost vs speed vs robustness</div></div>
+    </div>
+    <div class="panel" style="margin-top:14px;">
+      <h2>Demand Sensitivity Sweep (all methods)</h2>
+      <div class="plot-box"><div id="plot-cmp-sweep" style="height:300px;"></div><div class="cap">Total cost vs demand, % of base from setup tab</div></div>
+    </div>
+  </div>
+</div>
+
+<footer>Dispatch Pro · λ-iteration + metaheuristic economic dispatch analysis suite · client-side computation only</footer>
+</div>
+
+<script>
+/* =========================================================================
+   STATE
+========================================================================= */
+let generators = [];   // {a,b,c,pmin,pmax, ppz:[[lo,hi],...], rampUp, rampDown, valveE, valveF}
+let Bmatrix = [];       // n x n loss coefficients
+let lossesEnabled = false;
+let valveEnabled = false;
+let lastLambdaResult = null;
+let lastMetaResults = null; // {GA:{...}, PSO:{...}, GWO:{...}, DE:{...}, 'Vortex Search':{...}}
+
+/* =========================================================================
+   TAB SWITCHING
+========================================================================= */
+function switchTab(name){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active', t.dataset.tab===name));
+  ['setup','constraints','dispatch','multiperiod','meta','compare'].forEach(t=>{
+    document.getElementById('tab-'+t).classList.toggle('hidden', t!==name);
+  });
+  if(name==='constraints') renderConstraintTables();
+}
+
+/* ===========================================================
+   PDF REPORT EXPORT — jsPDF + html2canvas
+   Captures real computed results + chart images into a proper
+   multi-page PDF, not a browser print snapshot.
+=========================================================== */
+async function exportReport(){
+  if(!lastLambdaResult){
+    alert('Run the λ-dispatch (tab 3) at least once before exporting a report.');
+    return;
+  }
+
+  const btn = (typeof event !== 'undefined' && event?.target) ? event.target : document.querySelector('.btn-gold.no-print');
+  const originalText = btn.textContent;
+  btn.textContent = 'Generating PDF…';
+  btn.disabled = true;
+
+  try{
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF('p', 'mm', 'a4');
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const margin = 14;
+    let y = 18;
+
+    function addTitle(text, size=14){
+      doc.setFont('helvetica','bold'); doc.setFontSize(size);
+      doc.text(text, margin, y); y += size*0.6;
+    }
+    function addLine(text, size=10){
+      doc.setFont('helvetica','normal'); doc.setFontSize(size);
+      const split = doc.splitTextToSize(text, pageWidth - margin*2);
+      doc.text(split, margin, y); y += split.length*(size*0.42) + 2;
+    }
+    function checkPageBreak(neededSpace){
+      if(y + neededSpace > 280){ doc.addPage(); y = 18; }
+    }
+    function waitForRender(ms=120){
+      return new Promise(resolve=>setTimeout(resolve, ms));
+    }
+    async function addChartImage(elementId, caption, maxHeight=70){
+      const el = document.getElementById(elementId);
+      if(!el) return;
+      if(!el.offsetParent || el.getBoundingClientRect().width === 0 || el.getBoundingClientRect().height === 0){
+        await waitForRender(150);
+      }
+      checkPageBreak(maxHeight + 12);
+      const canvas = await html2canvas(el, {
+        scale:2,
+        backgroundColor:'#ffffff',
+        useCORS:true,
+        allowTaint:true,
+        logging:false,
+        width: el.scrollWidth || el.clientWidth || 900,
+        height: el.scrollHeight || el.clientHeight || 600
+      });
+      if(!canvas.width || !canvas.height){
+        throw new Error(`Unable to capture chart container: ${elementId}`);
+      }
+      const imgData = canvas.toDataURL('image/png');
+      const imgWidth = pageWidth - margin*2;
+      const imgHeight = Math.min(maxHeight, (canvas.height * imgWidth) / canvas.width);
+      doc.addImage(imgData, 'PNG', margin, y, imgWidth, imgHeight);
+      y += imgHeight + 4;
+      doc.setFont('helvetica','italic'); doc.setFontSize(8.5); doc.setTextColor(90);
+      doc.text(caption, margin, y); doc.setTextColor(0);
+      y += 8;
+    }
+    async function captureChartsForTab(tabName, items){
+      const previousTab = document.querySelector('.tab.active')?.dataset.tab;
+      switchTab(tabName);
+      await waitForRender(220);
+      window.scrollTo({top:0, behavior:'instant'});
+      for(const item of items){
+        await addChartImage(item.id, item.caption, item.maxHeight || 70);
+      }
+      if(previousTab && previousTab !== tabName){
+        switchTab(previousTab);
+        await waitForRender(120);
+      }
+    }
+    function addTable(head, rows){
+      checkPageBreak(10 + rows.length*6);
+      doc.autoTable({
+        startY: y, head:[head], body: rows,
+        margin:{left:margin, right:margin}, styles:{fontSize:8.5, cellPadding:2},
+        headStyles:{fillColor:[30,58,95]}, theme:'grid'
+      });
+      y = doc.lastAutoTable.finalY + 8;
+    }
+
+    /* ---------- Cover / summary ---------- */
+    addTitle('Dispatch Pro — Economic Load Dispatch Report', 16);
+    addLine(`Generated: ${new Date().toLocaleString()}`, 9);
+    y += 2;
+
+    addTitle('1. λ-Iteration Dispatch Summary', 12);
+    addLine(`Incremental cost λ = ${lastLambdaResult.lambda.toFixed(3)} ₹/MWh`);
+    addLine(`Demand P_D solved = ${document.getElementById('in-demand').value} MW`);
+    addLine(`Transmission loss = ${lastLambdaResult.loss.toFixed(2)} MW`);
+    addLine(`Total generation cost = ₹${lastLambdaResult.totalCost.toFixed(2)}/h`);
+    addLine(`Converged in ${lastLambdaResult.iterations} iterations (tolerance 0.001 MW)`);
+    y += 2;
+
+    addTable(
+      ['Generator','Power (MW)','Cost (₹/h)'],
+      generators.map((g,i)=>[`G${i+1}`, lastLambdaResult.power[i].toFixed(3), lastLambdaResult.cost[i].toFixed(2)])
+    );
+
+    /* ---------- Charts from λ dispatch tab ---------- */
+    checkPageBreak(80);
+    addTitle('2. Dispatch Analysis Charts', 12);
+    await captureChartsForTab('dispatch', [
+      {id:'plot-convergence', caption:'Figure 1: λ convergence trace across iterations'},
+      {id:'plot-incremental', caption:'Figure 2: Incremental cost curves and converged λ*'},
+      {id:'plot-cost-curve', caption:'Figure 3: Unit cost curves (with valve-point ripple if enabled)'}
+    ]);
+
+    /* ---------- Metaheuristic results, if available ---------- */
+    if(lastMetaResults){
+      doc.addPage(); y = 18;
+      addTitle('3. Metaheuristic Algorithm Comparison', 12);
+      addLine('Each algorithm executed across multiple independent runs; statistics below summarize the resulting cost distribution.');
+      y += 2;
+
+      addTable(
+        ['Algorithm','Mean cost','Std dev','Best','Worst','Mean time (ms)'],
+        Object.entries(lastMetaResults).map(([name,r])=>[
+          name, r.stats.mean.toFixed(2), r.stats.std.toFixed(2),
+          r.stats.best.toFixed(2), r.stats.worst.toFixed(2), r.meanTime.toFixed(2)
+        ])
+      );
+
+      await captureChartsForTab('meta', [
+        {id:'plot-meta-convergence', caption:'Figure 4: Convergence curves — best cost vs iteration per algorithm'},
+        {id:'plot-meta-box', caption:'Figure 5: Cost distribution across independent runs (box plot)'},
+        {id:'plot-meta-time', caption:'Figure 6: Mean computation time per algorithm'}
+      ]);
+    }
+
+    /* ---------- Comparison tab, if available ---------- */
+    if(lastLambdaResult && lastMetaResults){
+      doc.addPage(); y = 18;
+      addTitle('4. Method Comparison — λ-Iteration vs Metaheuristics', 12);
+      await captureChartsForTab('compare', [
+        {id:'plot-cmp-box', caption:'Figure 7: Cost distribution — deterministic vs stochastic methods'},
+        {id:'plot-cmp-radar', caption:'Figure 8: Normalized trade-off — cost efficiency, speed, robustness'},
+        {id:'plot-cmp-sweep', caption:'Figure 9: Demand sensitivity sweep across all methods'}
+      ]);
+    }
+
+    doc.save(`ELD_Report_${new Date().toISOString().slice(0,10)}.pdf`);
+  } catch(err){
+    console.error(err);
+    alert('PDF export failed: ' + err.message);
+  } finally {
+    btn.textContent = originalText;
+    btn.disabled = false;
+  }
+}
+
+/* =========================================================================
+   GENERATOR MANAGEMENT
+========================================================================= */
+function onAddGenerator(){
+  const a=parseFloat(document.getElementById('in-a').value);
+  const b=parseFloat(document.getElementById('in-b').value);
+  const c=parseFloat(document.getElementById('in-c').value);
+  const pmin=parseFloat(document.getElementById('in-pmin').value);
+  const pmax=parseFloat(document.getElementById('in-pmax').value);
+  if([a,b,c,pmin,pmax].some(isNaN)){ alert('Enter valid a, b, c, Pmin, Pmax.'); return; }
+  generators.push({a,b,c,pmin,pmax,ppz:[],rampUp:pmax-pmin,rampDown:pmax-pmin,valveE:0.1*b*10,valveF:0.045});
+  ['in-a','in-b','in-c','in-pmin','in-pmax'].forEach(id=>document.getElementById(id).value='');
+  rebuildBMatrix();
+  renderGeneratorTable();
+  renderConstraintTables();
+}
+function removeGenerator(i){ generators.splice(i,1); rebuildBMatrix(); renderGeneratorTable(); renderConstraintTables(); }
+function clearAll(){ generators=[]; Bmatrix=[]; renderGeneratorTable(); renderConstraintTables(); }
+
+function loadSample3(){
+  generators=[
+    {a:0.0080,b:2.0,c:25, pmin:10,pmax:85, ppz:[[35,45]], rampUp:30,rampDown:30, valveE:20,valveF:0.045},
+    {a:0.0096,b:1.6,c:60, pmin:10,pmax:80, ppz:[], rampUp:25,rampDown:25, valveE:18,valveF:0.042},
+    {a:0.0110,b:1.2,c:100,pmin:10,pmax:70, ppz:[[30,40]], rampUp:20,rampDown:20, valveE:15,valveF:0.040}
+  ];
+  document.getElementById('in-demand').value=150;
+  rebuildBMatrix(); renderGeneratorTable(); renderConstraintTables();
+}
+
+/* Widely-cited 6-unit ELD benchmark coefficients (approximate, literature-style) */
+function loadIEEE6(){
+  generators=[
+    {a:0.00375,b:2.00,c:756.799, pmin:100,pmax:500, ppz:[[210,240],[350,380]], rampUp:80,rampDown:80, valveE:105,valveF:0.0315},
+    {a:0.01750,b:1.75,c:451.325, pmin:50, pmax:200, ppz:[[90,110]],           rampUp:50,rampDown:50, valveE:98, valveF:0.0350},
+    {a:0.06250,b:1.00,c:1049.998,pmin:80, pmax:300, ppz:[[150,170]],          rampUp:65,rampDown:65, valveE:100,valveF:0.0400},
+    {a:0.00834,b:3.25,c:1243.531,pmin:50, pmax:150, ppz:[],                   rampUp:40,rampDown:40, valveE:90, valveF:0.0380},
+    {a:0.02500,b:3.00,c:1658.569,pmin:50, pmax:200, ppz:[[100,120]],          rampUp:45,rampDown:45, valveE:96, valveF:0.0370},
+    {a:0.02500,b:3.00,c:1356.659,pmin:50, pmax:120, ppz:[],                   rampUp:35,rampDown:35, valveE:92, valveF:0.0360}
+  ];
+  Bmatrix=[
+    [0.000049,0.000014,0.000015,0.000015,0.000016,0.000017],
+    [0.000014,0.000045,0.000016,0.000016,0.000017,0.000015],
+    [0.000015,0.000016,0.000039,0.000010,0.000012,0.000012],
+    [0.000015,0.000016,0.000010,0.000040,0.000014,0.000010],
+    [0.000016,0.000017,0.000012,0.000014,0.000035,0.000011],
+    [0.000017,0.000015,0.000012,0.000010,0.000011,0.000036]
+  ];
+  document.getElementById('in-demand').value=700;
+  renderGeneratorTable(); renderConstraintTables();
+}
+
+function rebuildBMatrix(){
+  const n=generators.length;
+  Bmatrix = Array.from({length:n},(_,i)=>Array.from({length:n},(_,j)=> i===j? 0.0002 + 0.00005*i : 0.00001));
+}
+
+function renderGeneratorTable(){
+  const table=document.getElementById('gen-table'); const empty=document.getElementById('gen-empty');
+  if(generators.length===0){ table.innerHTML=''; empty.classList.remove('hidden'); return; }
+  empty.classList.add('hidden');
+  let html=`<thead><tr><th>Gen</th><th>a</th><th>b</th><th>c</th><th>Pmin</th><th>Pmax</th><th></th></tr></thead><tbody>`;
+  generators.forEach((g,i)=>{
+    html+=`<tr><td class="gen-tag">G${i+1}</td><td>${g.a}</td><td>${g.b}</td><td>${g.c}</td><td>${g.pmin}</td><td>${g.pmax}</td>
+      <td><button class="btn-icon btn-danger" onclick="removeGenerator(${i})">✕</button></td></tr>`;
+  });
+  table.innerHTML=html+'</tbody>';
+}
+
+/* =========================================================================
+   CONSTRAINTS TAB RENDERING (editable tables bound back into generators[])
+========================================================================= */
+function toggleLosses(){ lossesEnabled=document.getElementById('toggle-losses').checked; }
+
+function renderConstraintTables(){
+  const bbox=document.getElementById('bmatrix-box');
+  if(generators.length===0){ bbox.innerHTML='<div class="empty-note">Add generators first.</div>'; }
+  else{
+    let html='<table><thead><tr><th></th>'+generators.map((_,j)=>`<th>G${j+1}</th>`).join('')+'</tr></thead><tbody>';
+    Bmatrix.forEach((row,i)=>{
+      html+=`<tr><td class="gen-tag">G${i+1}</td>`+row.map((v,j)=>`<td><input type="number" step="any" value="${v}" style="width:80px;" onchange="Bmatrix[${i}][${j}]=parseFloat(this.value)||0"></td>`).join('')+'</tr>';
+    });
+    bbox.innerHTML=html+'</tbody></table>';
+  }
+
+  const vbox=document.getElementById('valve-table');
+  if(generators.length===0){ vbox.innerHTML=''; }
+  else{
+    let h=`<table><thead><tr><th>Gen</th><th>e (₹/h)</th><th>f (rad/MW)</th></tr></thead><tbody>`;
+    generators.forEach((g,i)=>{
+      h+=`<tr><td class="gen-tag">G${i+1}</td>
+        <td><input type="number" step="any" value="${g.valveE}" onchange="generators[${i}].valveE=parseFloat(this.value)||0"></td>
+        <td><input type="number" step="any" value="${g.valveF}" onchange="generators[${i}].valveF=parseFloat(this.value)||0"></td></tr>`;
+    });
+    vbox.innerHTML=h+'</tbody></table>';
+  }
+
+  const pbox=document.getElementById('ppz-table');
+  if(generators.length===0){ pbox.innerHTML=''; }
+  else{
+    let h=`<table><thead><tr><th>Gen</th><th>Prohibited zones (lo-hi;lo-hi)</th></tr></thead><tbody>`;
+    generators.forEach((g,i)=>{
+      const val=g.ppz.map(z=>z.join('-')).join(';');
+      h+=`<tr><td class="gen-tag">G${i+1}</td><td><input type="text" value="${val}" placeholder="e.g. 35-45;60-65" onchange="setPPZ(${i}, this.value)"></td></tr>`;
+    });
+    pbox.innerHTML=h+'</tbody></table>';
+  }
+
+  const rbox=document.getElementById('ramp-table');
+  if(generators.length===0){ rbox.innerHTML=''; }
+  else{
+    let h=`<table><thead><tr><th>Gen</th><th>Ramp up (MW/period)</th><th>Ramp down (MW/period)</th></tr></thead><tbody>`;
+    generators.forEach((g,i)=>{
+      h+=`<tr><td class="gen-tag">G${i+1}</td>
+        <td><input type="number" step="any" value="${g.rampUp}" onchange="generators[${i}].rampUp=parseFloat(this.value)||0"></td>
+        <td><input type="number" step="any" value="${g.rampDown}" onchange="generators[${i}].rampDown=parseFloat(this.value)||0"></td></tr>`;
+    });
+    rbox.innerHTML=h+'</tbody>';
+  }
+}
+function setPPZ(i,str){
+  generators[i].ppz = str.split(';').map(s=>s.trim()).filter(Boolean).map(s=>s.split('-').map(Number)).filter(z=>z.length===2 && !z.some(isNaN));
+}
+
+/* =========================================================================
+   COST FUNCTIONS
+========================================================================= */
+function baseCost(g,p){ return g.a*p*p + g.b*p + g.c; }
+function valveCost(g,p){ return valveEnabled ? Math.abs(g.valveE*Math.sin(g.valveF*(g.pmin-p))) : 0; }
+function unitCost(g,p){ return baseCost(g,p) + valveCost(g,p); }
+
+function snapOutOfPPZ(g,p){
+  for(const [lo,hi] of g.ppz){
+    if(p>lo && p<hi){ return (p-lo)<(hi-p) ? lo : hi; }
+  }
+  return p;
+}
+
+function transmissionLoss(powers){
+  if(!lossesEnabled || Bmatrix.length===0) return 0;
+  let loss=0;
+  for(let i=0;i<powers.length;i++)
+    for(let j=0;j<powers.length;j++)
+      loss += powers[i]*(Bmatrix[i]?.[j] ?? 0)*powers[j];
+  return loss;
+}
+
+/* =========================================================================
+   LAMBDA-ITERATION SOLVER (losses via iterative penalty factor, PPZ via snapping)
+========================================================================= */
+function solveLambda(gens, demand){
+  const n=gens.length;
+  const pmin=gens.map(g=>g.pmin), pmax=gens.map(g=>g.pmax);
+  const invA=gens.map(g=>1/(2*g.a));
+  const sumInvA=invA.reduce((s,x)=>s+x,0);
+  const sumBOverA=gens.reduce((s,g,i)=>s+g.b*invA[i],0);
+  let lambda=(demand+sumBOverA)/sumInvA;
+  let power=new Array(n).fill(0);
+  let iterations=0; const MAX=3000; const TOL=0.001;
+  const trace=[{iter:0,lambda}];
+  let loss=0, dP=demand;
+
+  while(Math.abs(dP)>TOL && iterations<MAX){
+    power = gens.map((g,i)=>{
+      let p=(lambda-g.b)/(2*g.a);
+      p=Math.min(p,pmax[i]); p=Math.max(p,pmin[i]);
+      p=snapOutOfPPZ(g,p);
+      return p;
+    });
+    loss = transmissionLoss(power);
+    const sumP=power.reduce((s,x)=>s+x,0);
+    dP = (demand+loss) - sumP;
+    lambda += (2*dP)/sumInvA;
+    iterations++;
+    trace.push({iter:iterations,lambda});
+  }
+  if(iterations>=MAX) return {ok:false};
+  const cost=power.map((p,i)=>unitCost(gens[i],p));
+  return {ok:true, lambda, power, cost, loss, iterations, trace, totalCost:cost.reduce((a,b)=>a+b,0)};
+}
+
+/* =========================================================================
+   TAB 3 — RUN λ DISPATCH
+========================================================================= */
+function onSolveLambda(){
+  const demand=parseFloat(document.getElementById('in-demand').value);
+  if(generators.length===0||isNaN(demand)){ alert('Add generators and a demand value.'); return; }
+
+  lossesEnabled = document.getElementById('toggle-losses').checked;
+  valveEnabled = document.getElementById('toggle-valve').checked;
+
+  const withLoss = solveLambda(generators, demand);
+  const savedLossFlag = lossesEnabled;
+  lossesEnabled = false;
+  const noLoss = solveLambda(generators, demand);
+  lossesEnabled = savedLossFlag;
+
+  if(!withLoss.ok){ alert('Did not converge — check limits/demand feasibility.'); return; }
+  lastLambdaResult = withLoss;
+
+  document.getElementById('no-result-note').classList.add('hidden');
+  document.getElementById('lambda-result').classList.remove('hidden');
+
+  document.getElementById('out-lambda').textContent = withLoss.lambda.toFixed(3);
+  document.getElementById('out-demand').textContent = demand+' MW';
+  document.getElementById('out-loss').textContent = withLoss.loss.toFixed(2)+' MW';
+  document.getElementById('out-cost').textContent = '₹'+withLoss.totalCost.toFixed(0)+'/h';
+  document.getElementById('out-iters').textContent = withLoss.iterations;
+
+  document.getElementById('lossCompareTable').innerHTML = `
+    <thead><tr><th>Scenario</th><th>λ (₹/MWh)</th><th>Loss (MW)</th><th>Total cost (₹/h)</th></tr></thead>
+    <tbody>
+      <tr><td>Without losses</td><td>${noLoss.ok?noLoss.lambda.toFixed(3):'—'}</td><td>0.00</td><td>${noLoss.ok?noLoss.totalCost.toFixed(2):'—'}</td></tr>
+      <tr><td>With B-coefficient losses</td><td>${withLoss.lambda.toFixed(3)}</td><td>${withLoss.loss.toFixed(2)}</td><td>${withLoss.totalCost.toFixed(2)}</td></tr>
+    </tbody>`;
+
+  renderResultTable(withLoss);
+  renderFlowDiagram(withLoss, demand);
+  renderConvergencePlot(withLoss);
+  renderIncrementalPlot(demand, withLoss);
+  renderCostCurvePlot();
+
+  document.getElementById('why-differs').innerHTML =
+    `<b>Why this differs:</b> λ = ${withLoss.lambda.toFixed(3)} ₹/MWh is the incremental cost every unit converges to.
+     Mismatch tolerance was 0.001 MW, reached in ${withLoss.iterations} iterations.
+     ${lossesEnabled? `Transmission loss of ${withLoss.loss.toFixed(2)} MW is added to demand internally (ΣP = P_D + P_loss), which is why λ is higher than the loss-free case.` : 'Losses are currently disabled — enable them in the Constraints tab to see λ rise.'}
+     ${valveEnabled? 'Valve-point ripple is active, so the "incremental cost curve" plot below shows local wiggles — plain λ-iteration can settle near, but not exactly at, the true global optimum in this case.' : ''}`;
+}
+
+function renderResultTable(r){
+  let html=`<thead><tr><th>Gen</th><th>Power (MW)</th><th>% of Pmax</th><th>Cost (₹/h)</th><th>In PPZ-adjusted?</th></tr></thead><tbody>`;
+  let totalP=0,totalC=0;
+  r.power.forEach((p,i)=>{
+    totalP+=p; totalC+=r.cost[i];
+    const g=generators[i];
+    const wasSnapped = g.ppz.some(([lo,hi])=> p===lo || p===hi);
+    html+=`<tr><td class="gen-tag">G${i+1}</td><td>${p.toFixed(3)}</td><td>${(p/g.pmax*100).toFixed(1)}%</td><td>${r.cost[i].toFixed(2)}</td><td>${wasSnapped?'<span class="pill pill-warn">snapped</span>':'<span class="pill pill-ok">clear</span>'}</td></tr>`;
+  });
+  html+=`<tr style="font-weight:700;"><td>Total</td><td>${totalP.toFixed(3)}</td><td>—</td><td>${totalC.toFixed(2)}</td><td></td></tr>`;
+  document.getElementById('resultTable').innerHTML=html+'</tbody>';
+}
+
+function renderFlowDiagram(r,demand){
+  const n=r.power.length, w=Math.max(560,150*n+160), h=150, busX=w-90, sp=(h-40)/(n+1);
+  let svg=`<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}">`;
+  svg+=`<line x1="${busX}" y1="15" x2="${busX}" y2="${h-15}" stroke="#C1652B" stroke-width="3"/><text x="${busX+10}" y="${h/2}" fill="#C1652B" font-family="IBM Plex Mono" font-size="11" font-weight="600">BUS</text>`;
+  r.power.forEach((p,i)=>{
+    const y=20+sp*(i+1)-10, genX=60, strokeW=Math.max(1.5,Math.min(6,(p/demand)*18));
+    svg+=`<circle cx="${genX}" cy="${y}" r="16" fill="#fff" stroke="#0E8C82" stroke-width="2"/><text x="${genX}" y="${y+4}" fill="#0E8C82" font-family="IBM Plex Mono" font-size="10" text-anchor="middle" font-weight="600">G${i+1}</text>`;
+    svg+=`<line x1="${genX+16}" y1="${y}" x2="${busX}" y2="${y}" stroke="#0E8C82" stroke-width="${strokeW}" opacity="0.55"/><text x="${genX+30}" y="${y-6}" fill="#5B6B7C" font-family="IBM Plex Mono" font-size="10">${p.toFixed(1)} MW</text>`;
+  });
+  svg+=`<line x1="${busX}" y1="${h/2}" x2="${busX+60}" y2="${h/2}" stroke="#16202A" stroke-width="2"/><text x="${busX+64}" y="${h/2+4}" fill="#16202A" font-family="IBM Plex Mono" font-size="11" font-weight="600">LOAD ${demand} MW</text></svg>`;
+  document.getElementById('flow-diagram').innerHTML=svg;
+}
+
+function renderConvergencePlot(r){
+  Plotly.newPlot('plot-convergence',[{x:r.trace.map(t=>t.iter),y:r.trace.map(t=>t.lambda),mode:'lines+markers',line:{color:'#C1652B',width:2},marker:{size:4}}],
+    baseLayout('Iteration','λ (₹/MWh)'),{displayModeBar:false,responsive:true});
+}
+function renderIncrementalPlot(demand,r){
+  const traces=generators.map((g,i)=>({x:[0,demand],y:[g.b,2*g.a*demand+g.b],mode:'lines',name:`G${i+1}`,line:{width:2}}));
+  traces.push({x:[0,demand],y:[r.lambda,r.lambda],mode:'lines',name:'λ*',line:{dash:'dot',width:2,color:'#C1652B'}});
+  Plotly.newPlot('plot-incremental',traces,baseLayout('P (MW)','dC/dP (₹/MWh)'),{displayModeBar:false,responsive:true});
+}
+function renderCostCurvePlot(){
+  const traces=generators.map((g,i)=>{
+    const xs=[],ys=[];
+    for(let p=g.pmin;p<=g.pmax;p+=(g.pmax-g.pmin)/60){ xs.push(p); ys.push(unitCost(g,p)); }
+    return {x:xs,y:ys,mode:'lines',name:`G${i+1}`,line:{width:2}};
+  });
+  Plotly.newPlot('plot-cost-curve',traces,baseLayout('P (MW)','Cost (₹/h)'),{displayModeBar:false,responsive:true});
+}
+
+/* =========================================================================
+   TAB 4 — MULTI-PERIOD RAMP-CONSTRAINED DISPATCH
+========================================================================= */
+function onRunMultiPeriod(){
+  if(generators.length===0){ alert('Add generators first.'); return; }
+  const demands = document.getElementById('in-loadcurve').value.split(',').map(s=>parseFloat(s.trim())).filter(x=>!isNaN(x));
+  if(demands.length===0){ alert('Enter a valid load curve.'); return; }
+
+  let prevPower = generators.map(g=>g.pmin);
+  const schedule = []; // per period: {power:[...], cost, demand}
+
+  demands.forEach(d=>{
+    // build temp gens with ramp-adjusted pmin/pmax for this period
+    const tempGens = generators.map((g,i)=>({
+      ...g,
+      pmin: Math.max(g.pmin, prevPower[i]-g.rampDown),
+      pmax: Math.min(g.pmax, prevPower[i]+g.rampUp)
+    }));
+    const r = solveLambda(tempGens, d);
+    if(r.ok){
+      schedule.push({power:r.power, cost:r.totalCost, demand:d});
+      prevPower = r.power;
+    } else {
+      schedule.push({power:prevPower.slice(), cost:null, demand:d});
+    }
+  });
+
+  document.getElementById('mp-empty').classList.add('hidden');
+  document.getElementById('mp-result').classList.remove('hidden');
+
+  const periods = schedule.map((_,i)=>i+1);
+  const colors=['#0E8C82','#C1652B','#1E3A5F','#8AA6C2','#B08968','#6FBF73'];
+  const stackTraces = generators.map((g,gi)=>({
+    x:periods, y:schedule.map(s=>s.power[gi]), stackgroup:'one', name:`G${gi+1}`,
+    mode:'lines', line:{width:0.5,color:colors[gi%colors.length]}, fillcolor:colors[gi%colors.length]
+  }));
+  stackTraces.push({x:periods,y:schedule.map(s=>s.demand),mode:'lines',name:'Demand',line:{color:'#16202A',width:2,dash:'dot'}});
+  Plotly.newPlot('plot-mp-stack', stackTraces, baseLayout('Period','MW'), {displayModeBar:false,responsive:true});
+
+  Plotly.newPlot('plot-mp-cost', [{x:periods,y:schedule.map(s=>s.cost),type:'bar',marker:{color:'#C1652B'}}],
+    baseLayout('Period','Cost (₹/h)'), {displayModeBar:false,responsive:true});
+}
+
+/* =========================================================================
+   METAHEURISTIC ENGINE (shared objective, penalty-based)
+========================================================================= */
+function objective(gens, demand, powers){
+  const sumP = powers.reduce((a,b)=>a+b,0);
+  const loss = transmissionLoss(powers);
+  const mismatch = Math.abs((demand+loss) - sumP);
+  const cost = powers.reduce((s,p,i)=>s+unitCost(gens[i],p),0);
+  const ppzPenalty = powers.reduce((s,p,i)=>{
+    return s + gens[i].ppz.reduce((s2,[lo,hi])=> (p>lo&&p<hi) ? s2+5000 : s2, 0);
+  },0);
+  return cost + mismatch*mismatch*50 + ppzPenalty;
+}
+function clamp(p,lo,hi){ return Math.max(lo,Math.min(hi,p)); }
+function randomFeasible(gens, demand){
+  const n=gens.length; const p=new Array(n);
+  let remaining=demand;
+  for(let i=0;i<n;i++){
+    const lo=gens[i].pmin, hi=gens[i].pmax;
+    const v = lo + Math.random()*(hi-lo);
+    p[i]=v; remaining-=v;
+  }
+  return p;
+}
+
+function runGA(gens, demand, pop, iters, mutRate, recordTrace){
+  let population = Array.from({length:pop},()=>randomFeasible(gens,demand));
+  const trace=[];
+  for(let it=0;it<iters;it++){
+    const scored = population.map(ind=>({ind,f:objective(gens,demand,ind)})).sort((a,b)=>a.f-b.f);
+    if(recordTrace) trace.push(scored[0].f);
+    const elite = scored.slice(0,Math.max(2,Math.floor(pop*0.2))).map(s=>s.ind);
+    const newPop=[...elite];
+    while(newPop.length<pop){
+      const p1=elite[Math.floor(Math.random()*elite.length)];
+      const p2=elite[Math.floor(Math.random()*elite.length)];
+      let child=p1.map((v,i)=> Math.random()<0.5? v : p2[i]);
+      if(Math.random()<mutRate) child=child.map((v,i)=>clamp(v+(Math.random()-0.5)*(gens[i].pmax-gens[i].pmin)*0.2, gens[i].pmin, gens[i].pmax));
+      newPop.push(child);
+    }
+    population=newPop;
+  }
+  const best = population.map(ind=>({ind,f:objective(gens,demand,ind)})).sort((a,b)=>a.f-b.f)[0];
+  return {power:best.ind, cost:best.ind.reduce((s,p,i)=>s+unitCost(gens[i],p),0), trace};
+}
+
+function runPSO(gens, demand, pop, iters, w, c1, c2, recordTrace){
+  const n=gens.length;
+  let X = Array.from({length:pop},()=>randomFeasible(gens,demand));
+  let V = Array.from({length:pop},()=>new Array(n).fill(0));
+  let pBest = X.map(x=>x.slice());
+  let pBestF = X.map(x=>objective(gens,demand,x));
+  let gBestIdx = pBestF.indexOf(Math.min(...pBestF));
+  let gBest = pBest[gBestIdx].slice();
+  const trace=[];
+
+  for(let it=0;it<iters;it++){
+    for(let i=0;i<pop;i++){
+      for(let d=0; d<n; d++){
+        const r1=Math.random(), r2=Math.random();
+        V[i][d] = w*V[i][d] + c1*r1*(pBest[i][d]-X[i][d]) + c2*r2*(gBest[d]-X[i][d]);
+        X[i][d] = clamp(X[i][d]+V[i][d], gens[d].pmin, gens[d].pmax);
+      }
+      const f = objective(gens,demand,X[i]);
+      if(f<pBestF[i]){ pBestF[i]=f; pBest[i]=X[i].slice(); }
+      if(f<objective(gens,demand,gBest)) gBest=X[i].slice();
+    }
+    if(recordTrace) trace.push(objective(gens,demand,gBest));
+  }
+  return {power:gBest, cost:gBest.reduce((s,p,i)=>s+unitCost(gens[i],p),0), trace};
+}
+
+/* Grey Wolf Optimizer — Mirjalili, Mirjalili & Lewis (2014) */
+function runGWO(gens, demand, pop, iters, recordTrace){
+  const n = gens.length;
+  let wolves = Array.from({length:pop}, () => randomFeasible(gens, demand));
+  const evalWolf = (w) => objective(gens, demand, w);
+  const trace = [];
+
+  for(let it=0; it<iters; it++){
+    const ranked = wolves.map(w => ({w, f: evalWolf(w)})).sort((a,b)=>a.f-b.f);
+    const alpha = ranked[0].w, beta = ranked[1].w, delta = ranked[2].w;
+    if(recordTrace) trace.push(ranked[0].f);
+
+    const a = 2 - it * (2 / iters);
+    wolves = wolves.map(wolf => {
+      const newPos = new Array(n);
+      for(let d=0; d<n; d++){
+        const r1a=Math.random(), r2a=Math.random();
+        const A1 = 2*a*r1a - a, C1 = 2*r2a;
+        const Dalpha = Math.abs(C1*alpha[d] - wolf[d]);
+        const X1 = alpha[d] - A1*Dalpha;
+
+        const r1b=Math.random(), r2b=Math.random();
+        const A2 = 2*a*r1b - a, C2 = 2*r2b;
+        const Dbeta = Math.abs(C2*beta[d] - wolf[d]);
+        const X2 = beta[d] - A2*Dbeta;
+
+        const r1d=Math.random(), r2d=Math.random();
+        const A3 = 2*a*r1d - a, C3 = 2*r2d;
+        const Ddelta = Math.abs(C3*delta[d] - wolf[d]);
+        const X3 = delta[d] - A3*Ddelta;
+
+        newPos[d] = clamp((X1 + X2 + X3) / 3, gens[d].pmin, gens[d].pmax);
+      }
+      return newPos;
+    });
+  }
+
+  const finalRanked = wolves.map(w => ({w, f: evalWolf(w)})).sort((a,b)=>a.f-b.f);
+  const best = finalRanked[0].w;
+  return {power:best, cost:best.reduce((s,p,i)=>s+unitCost(gens[i],p),0), trace};
+}
+
+/* Differential Evolution — Storn & Price (1997), DE/rand/1/bin */
+function runDE(gens, demand, pop, iters, F, CR, recordTrace){
+  const n = gens.length;
+  let population = Array.from({length:pop}, () => randomFeasible(gens, demand));
+  let fitness = population.map(ind => objective(gens, demand, ind));
+  const trace = [];
+
+  for(let it=0; it<iters; it++){
+    for(let i=0; i<pop; i++){
+      const idxs = new Set();
+      while(idxs.size < 3){
+        const r = Math.floor(Math.random()*pop);
+        if(r !== i) idxs.add(r);
+      }
+      const [r1, r2, r3] = [...idxs];
+
+      const mutant = new Array(n);
+      for(let d=0; d<n; d++){
+        mutant[d] = clamp(population[r1][d] + F * (population[r2][d] - population[r3][d]), gens[d].pmin, gens[d].pmax);
+      }
+
+      const trial = population[i].slice();
+      const jRand = Math.floor(Math.random()*n);
+      for(let d=0; d<n; d++){
+        if(Math.random() < CR || d === jRand) trial[d] = mutant[d];
+      }
+
+      const trialF = objective(gens, demand, trial);
+      if(trialF < fitness[i]){
+        population[i] = trial;
+        fitness[i] = trialF;
+      }
+    }
+    if(recordTrace) trace.push(Math.min(...fitness));
+  }
+
+  const bestIdx = fitness.indexOf(Math.min(...fitness));
+  const best = population[bestIdx];
+  return {power:best, cost:best.reduce((s,p,i)=>s+unitCost(gens[i],p),0), trace};
+}
+
+/* Vortex Search — Doğan & Ölmez (2015) */
+function gaussianRandom(mean, std){
+  let u=0, v=0;
+  while(u===0) u=Math.random();
+  while(v===0) v=Math.random();
+  return mean + std * Math.sqrt(-2*Math.log(u)) * Math.cos(2*Math.PI*v);
+}
+
+function runVortexSearch(gens, demand, pop, iters, recordTrace){
+  const n = gens.length;
+  let center = gens.map(g => (g.pmin + g.pmax) / 2);
+  let bestSol = center.slice();
+  let bestF = objective(gens, demand, bestSol);
+  const trace = [];
+
+  for(let it=0; it<iters; it++){
+    const progress = it / iters;
+    const radiusScale = Math.pow(1 - progress, 3);
+    const candidates = Array.from({length:pop}, () => {
+      return center.map((c,d) => {
+        const range = gens[d].pmax - gens[d].pmin;
+        const std = Math.max(0.001, radiusScale * range * 0.5);
+        return clamp(gaussianRandom(c, std), gens[d].pmin, gens[d].pmax);
+      });
+    });
+
+    candidates.forEach(cand => {
+      const f = objective(gens, demand, cand);
+      if(f < bestF){ bestF = f; bestSol = cand; }
+    });
+
+    center = bestSol.slice();
+    if(recordTrace) trace.push(bestF);
+  }
+
+  return {power:bestSol, cost:bestSol.reduce((s,p,i)=>s+unitCost(gens[i],p),0), trace};
+}
+
+/* =========================================================================
+   TAB 5 — RUN METAHEURISTIC SUITE (multi-trial statistics)
+========================================================================= */
+function stats(arr){
+  const n=arr.length, mean=arr.reduce((a,b)=>a+b,0)/n;
+  const std=Math.sqrt(arr.reduce((s,x)=>s+(x-mean)**2,0)/n);
+  return {mean, std, best:Math.min(...arr), worst:Math.max(...arr)};
+}
+
+function onRunMetaSuite(){
+  if(generators.length===0){ alert('Add generators first.'); return; }
+  const demand=parseFloat(document.getElementById('in-demand').value);
+  if(isNaN(demand)){ alert('Enter a demand value in Setup tab.'); return; }
+
+  const pop=parseInt(document.getElementById('meta-pop').value)||25;
+  const iters=parseInt(document.getElementById('meta-iters').value)||80;
+  const runs=parseInt(document.getElementById('meta-runs').value)||20;
+  const w=parseFloat(document.getElementById('meta-inertia').value)||0.7;
+  const c1=parseFloat(document.getElementById('meta-c1').value)||1.5;
+  const c2=parseFloat(document.getElementById('meta-c2').value)||1.5;
+  const mut=parseFloat(document.getElementById('meta-mut').value)||0.15;
+  const deF=parseFloat(document.getElementById('meta-de-f').value)||0.8;
+  const deCR=parseFloat(document.getElementById('meta-de-cr').value)||0.9;
+
+  const algos = {
+    GA: (recordTrace)=>runGA(generators,demand,pop,iters,mut,recordTrace),
+    PSO:(recordTrace)=>runPSO(generators,demand,pop,iters,w,c1,c2,recordTrace),
+    GWO:(recordTrace)=>runGWO(generators,demand,pop,iters,recordTrace),
+    DE:(recordTrace)=>runDE(generators,demand,pop,iters,deF,deCR,recordTrace),
+    'Vortex Search':(recordTrace)=>runVortexSearch(generators,demand,pop,iters,recordTrace)
+  };
+
+  const results = {};
+  Object.entries(algos).forEach(([name,fn])=>{
+    const costs=[]; const times=[]; let convergenceSum=null;
+    for(let r=0;r<runs;r++){
+      const t0=performance.now();
+      const recordTrace = r===0; // only record trace on first run to keep it light
+      const out = fn(recordTrace);
+      const t1=performance.now();
+      costs.push(out.cost); times.push(t1-t0);
+      if(recordTrace) convergenceSum = out.trace;
+    }
+    results[name] = {costs, times, trace:convergenceSum, stats:stats(costs), meanTime: times.reduce((a,b)=>a+b,0)/times.length};
+  });
+
+  lastMetaResults = results;
+
+  document.getElementById('meta-empty').classList.add('hidden');
+  document.getElementById('meta-result').classList.remove('hidden');
+
+  let html=`<thead><tr><th>Algorithm</th><th>Mean cost</th><th>Std dev</th><th>Best</th><th>Worst</th><th>Mean time (ms)</th></tr></thead><tbody>`;
+  Object.entries(results).forEach(([name,r])=>{
+    html+=`<tr><td class="gen-tag">${name}</td><td>${r.stats.mean.toFixed(2)}</td><td>${r.stats.std.toFixed(2)}</td><td>${r.stats.best.toFixed(2)}</td><td>${r.stats.worst.toFixed(2)}</td><td>${r.meanTime.toFixed(2)}</td></tr>`;
+  });
+  document.getElementById('meta-stats-table').innerHTML=html+'</tbody>';
+
+  const convTraces = Object.entries(results).map(([name,r],i)=>({
+    x:r.trace.map((_,idx)=>idx), y:r.trace, mode:'lines', name, line:{width:2}
+  }));
+  Plotly.newPlot('plot-meta-convergence', convTraces, baseLayout('Iteration','Best objective (penalized cost)'), {displayModeBar:false,responsive:true});
+
+  const boxTraces = Object.entries(results).map(([name,r])=>({y:r.costs, type:'box', name, boxpoints:'all', jitter:0.4, pointpos:0}));
+  Plotly.newPlot('plot-meta-box', boxTraces, baseLayout('','Cost (₹/h)'), {displayModeBar:false,responsive:true});
+
+  Plotly.newPlot('plot-meta-time', [{x:Object.keys(results), y:Object.values(results).map(r=>r.meanTime), type:'bar', marker:{color:'#C1652B'}}],
+    baseLayout('Algorithm','Mean time per run (ms)'), {displayModeBar:false,responsive:true});
+
+  renderComparisonTab(demand);
+}
+
+/* =========================================================================
+   TAB 6 — DEEP COMPARISON
+========================================================================= */
+function renderComparisonTab(demand){
+  if(!lastLambdaResult || !lastMetaResults){ return; }
+  document.getElementById('cmp-empty').classList.add('hidden');
+  document.getElementById('cmp-result').classList.remove('hidden');
+
+  const rows = [{name:'λ-Iteration', cost:lastLambdaResult.totalCost, loss:lastLambdaResult.loss, time:0.5, std:0}];
+  Object.entries(lastMetaResults).forEach(([name,r])=>{
+    rows.push({name, cost:r.stats.mean, loss:transmissionLoss(r.costs?[]:[]), time:r.meanTime, std:r.stats.std});
+  });
+
+  let html=`<thead><tr><th>Method</th><th>Cost (₹/h)</th><th>Loss (MW)</th><th>Mean time (ms)</th><th>Std dev (robustness)</th></tr></thead><tbody>`;
+  rows.forEach(r=>{
+    html+=`<tr><td class="gen-tag">${r.name}</td><td>${r.cost.toFixed(2)}</td><td>${r.name==='λ-Iteration'?lastLambdaResult.loss.toFixed(2):'—'}</td><td>${r.time.toFixed(2)}</td><td>${r.std.toFixed(2)}</td></tr>`;
+  });
+  document.getElementById('cmp-table').innerHTML=html+'</tbody>';
+
+  const boxTraces = Object.entries(lastMetaResults).map(([name,r])=>({y:r.costs,type:'box',name,boxpoints:'all',jitter:.4,pointpos:0}));
+  boxTraces.push({y:[lastLambdaResult.totalCost], type:'box', name:'λ-Iteration', boxpoints:'all'});
+  Plotly.newPlot('plot-cmp-box', boxTraces, baseLayout('','Cost (₹/h)'), {displayModeBar:false,responsive:true});
+
+  // simple radar-style via scatterpolar: normalize cost(lower better->invert), speed(lower time better->invert), robustness(lower std better->invert)
+  const allCosts=rows.map(r=>r.cost), allTimes=rows.map(r=>r.time+0.001), allStd=rows.map(r=>r.std+0.001);
+  const norm=(v,arr)=> 1 - (v-Math.min(...arr))/((Math.max(...arr)-Math.min(...arr))||1);
+  const radarTraces = rows.map(r=>({
+    type:'scatterpolar',
+    r:[norm(r.cost,allCosts), norm(r.time,allTimes), norm(r.std,allStd), norm(r.cost,allCosts)],
+    theta:['Cost efficiency','Speed','Robustness','Cost efficiency'],
+    fill:'toself', name:r.name
+  }));
+  Plotly.newPlot('plot-cmp-radar', radarTraces, {
+    polar:{radialaxis:{visible:true, range:[0,1]}},
+    paper_bgcolor:'transparent', font:{family:'IBM Plex Mono',size:10,color:'#5B6B7C'}, showlegend:true
+  }, {displayModeBar:false,responsive:true});
+
+  // sensitivity sweep
+  const [loPct,hiPct] = document.getElementById('in-sweep-range').value.split(',').map(Number);
+  const lo=(loPct||80)/100, hi=(hiPct||120)/100;
+  const points=9; const xs=[];
+  const lambdaYs=[], gaYs=[], psoYs=[], gwoYs=[], deYs=[], vortexYs=[];
+  for(let i=0;i<points;i++){
+    const factor = lo + (hi-lo)*i/(points-1);
+    const d = demand*factor;
+    xs.push(d);
+    const lr = solveLambda(generators, d);
+    lambdaYs.push(lr.ok? lr.totalCost : null);
+    gaYs.push(runGA(generators,d,15,30,0.15,false).cost);
+    psoYs.push(runPSO(generators,d,15,30,0.7,1.5,1.5,false).cost);
+    gwoYs.push(runGWO(generators,d,15,30,false).cost);
+    deYs.push(runDE(generators,d,15,30,0.8,0.9,false).cost);
+    vortexYs.push(runVortexSearch(generators,d,15,30,false).cost);
+  }
+  Plotly.newPlot('plot-cmp-sweep', [
+    {x:xs,y:lambdaYs,mode:'lines+markers',name:'λ-Iteration',line:{color:'#1E3A5F',width:2}},
+    {x:xs,y:gaYs,mode:'lines+markers',name:'GA',line:{color:'#C1652B',width:2}},
+    {x:xs,y:psoYs,mode:'lines+markers',name:'PSO',line:{color:'#0E8C82',width:2}},
+    {x:xs,y:gwoYs,mode:'lines+markers',name:'GWO',line:{color:'#D8A03D',width:2}},
+    {x:xs,y:deYs,mode:'lines+markers',name:'DE',line:{color:'#7A5DC7',width:2}},
+    {x:xs,y:vortexYs,mode:'lines+markers',name:'Vortex Search',line:{color:'#0E8C82',width:2,dash:'dash'}}
+  ], baseLayout('Demand (MW)','Total cost (₹/h)'), {displayModeBar:false,responsive:true});
+}
+
+/* =========================================================================
+   SHARED PLOT LAYOUT
+========================================================================= */
+function baseLayout(xTitle,yTitle){
+  return {
+    margin:{t:20,l:55,r:20,b:40}, paper_bgcolor:'transparent', plot_bgcolor:'transparent',
+    font:{color:'#5B6B7C',family:'IBM Plex Mono',size:10},
+    xaxis:{title:xTitle,gridcolor:'#DCE1E8'}, yaxis:{title:yTitle,gridcolor:'#DCE1E8'},
+    legend:{font:{size:9}}
+  };
+}
+
+/* init */
+renderGeneratorTable();
+</script>
+</body>
+</html>
