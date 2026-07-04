@@ -19,6 +19,8 @@
 
 ## Publish with GitHub Pages
 
+This is the easiest way to open the dashboard directly from GitHub in a browser.
+
 1. Make sure the repository is committed and pushed to GitHub:
    ```bash
    git add .
@@ -27,17 +29,19 @@
    ```
 2. Open your repository on GitHub.
 3. Go to `Settings` → `Pages`.
-4. Set the source to:
+4. Under `Source`, choose:
    - Branch: `main`
    - Folder: `/ (root)`
-5. Save.
-6. Wait a minute for GitHub Pages to publish.
+5. Click `Save`.
+6. Wait a minute or two for GitHub to publish the site.
 
-Your live site will usually be available at:
+Once published, your dashboard will be available at:
 
 ```text
 https://<your-github-username>.github.io/Power_System/
 ```
+
+You can now open that URL anytime from your browser without using Codespaces.
 
 ## Publish with Netlify or Vercel
 
