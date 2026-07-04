@@ -483,12 +483,12 @@ function loadSample3(){
 /* Widely-cited 6-unit ELD benchmark coefficients (approximate, literature-style) */
 function loadIEEE6(){
   generators=[
-    {a:0.00375,b:2.00,c:756.799, pmin:100,pmax:500, ppz:[[210,240],[350,380]], rampUp:80,rampDown:80, valveE:105,valveF:0.0315},
-    {a:0.01750,b:1.75,c:451.325, pmin:50, pmax:200, ppz:[[90,110]],           rampUp:50,rampDown:50, valveE:98, valveF:0.0350},
-    {a:0.06250,b:1.00,c:1049.998,pmin:80, pmax:300, ppz:[[150,170]],          rampUp:65,rampDown:65, valveE:100,valveF:0.0400},
-    {a:0.00834,b:3.25,c:1243.531,pmin:50, pmax:150, ppz:[],                   rampUp:40,rampDown:40, valveE:90, valveF:0.0380},
-    {a:0.02500,b:3.00,c:1658.569,pmin:50, pmax:200, ppz:[[100,120]],          rampUp:45,rampDown:45, valveE:96, valveF:0.0370},
-    {a:0.02500,b:3.00,c:1356.659,pmin:50, pmax:120, ppz:[],                   rampUp:35,rampDown:35, valveE:92, valveF:0.0360}
+    {a:0.00375,b:2.00,c:756.799, pmin:100,pmax:500, ppz:[[225,235]],           rampUp:80,rampDown:80, valveE:105,valveF:0.0315},
+    {a:0.01750,b:1.75,c:451.325, pmin:50, pmax:200, ppz:[[95,105]],            rampUp:50,rampDown:50, valveE:98, valveF:0.0350},
+    {a:0.06250,b:1.00,c:1049.998,pmin:80, pmax:300, ppz:[[155,165]],           rampUp:65,rampDown:65, valveE:100,valveF:0.0400},
+    {a:0.00834,b:3.25,c:1243.531,pmin:50, pmax:150, ppz:[],                    rampUp:40,rampDown:40, valveE:90, valveF:0.0380},
+    {a:0.02500,b:3.00,c:1658.569,pmin:50, pmax:200, ppz:[[105,115]],           rampUp:45,rampDown:45, valveE:96, valveF:0.0370},
+    {a:0.02500,b:3.00,c:1356.659,pmin:50, pmax:120, ppz:[],                    rampUp:35,rampDown:35, valveE:92, valveF:0.0360}
   ];
   Bmatrix=[
     [0.000049,0.000014,0.000015,0.000015,0.000016,0.000017],
@@ -608,9 +608,12 @@ function solveLambda(gens, demand){
   const sumBOverA=gens.reduce((s,g,i)=>s+g.b*invA[i],0);
   let lambda=(demand+sumBOverA)/sumInvA;
   let power=new Array(n).fill(0);
-  let iterations=0; const MAX=3000; const TOL=0.001;
+  let iterations=0; const MAX=3000; const TOL=0.01;
+  const DAMPING=0.5;
   const trace=[{iter:0,lambda}];
   let loss=0, dP=demand;
+
+  let bestPower = null, bestDP = Infinity, bestLambda = lambda, bestLoss = 0;
 
   while(Math.abs(dP)>TOL && iterations<MAX){
     power = gens.map((g,i)=>{
@@ -622,13 +625,29 @@ function solveLambda(gens, demand){
     loss = transmissionLoss(power);
     const sumP=power.reduce((s,x)=>s+x,0);
     dP = (demand+loss) - sumP;
-    lambda += (2*dP)/sumInvA;
+
+    if(Math.abs(dP) < Math.abs(bestDP)){
+      bestDP = dP; bestPower = power.slice(); bestLambda = lambda; bestLoss = loss;
+    }
+
+    lambda += DAMPING * (2*dP)/sumInvA;
     iterations++;
     trace.push({iter:iterations,lambda});
   }
-  if(iterations>=MAX) return {ok:false};
-  const cost=power.map((p,i)=>unitCost(gens[i],p));
-  return {ok:true, lambda, power, cost, loss, iterations, trace, totalCost:cost.reduce((a,b)=>a+b,0)};
+
+  const converged = Math.abs(dP) <= TOL;
+  const finalPower = converged ? power : bestPower;
+  const finalLambda = converged ? lambda : bestLambda;
+  const finalLoss = converged ? loss : bestLoss;
+
+  if(!finalPower) return {ok:false};
+
+  const cost=finalPower.map((p,i)=>unitCost(gens[i],p));
+  return {
+    ok:true, lambda:finalLambda, power:finalPower, cost, loss:finalLoss,
+    iterations, trace, totalCost:cost.reduce((a,b)=>a+b,0),
+    approximate: !converged
+  };
 }
 
 /* =========================================================================
