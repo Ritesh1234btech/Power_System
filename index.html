@@ -209,6 +209,9 @@ footer{margin-top:30px;text-align:center;color:var(--muted);font-family:var(--fo
     <h2>24-Period Load Curve</h2>
     <p class="note">Comma-separated demand values (MW), one per period. Ramp limits from the Constraints tab are enforced between consecutive periods.</p>
     <input type="text" id="in-loadcurve" value="420,410,405,400,410,440,520,610,680,720,740,750,745,730,710,690,670,700,730,690,620,540,470,430">
+    <div class="note" style="margin:6px 0 0;">For a demonstrative commitment schedule showing units turning ON/OFF, ensure demand varies enough that no single unit's Pmax covers the full range — try a peak near 900-1000 MW and a low near 200-300 MW.</div>
+    <div class="toggle-row"><input type="checkbox" id="mp-use-uc" onchange="renderMPUCBadge()"><span>Use Unit Commitment schedule</span></div>
+    <div id="mp-uc-badge" class="note hidden" style="font-weight:700;color:var(--copper);">Using commitment schedule from Unit Commitment tab.</div>
     <div style="margin-top:10px;"><button class="btn-primary" onclick="onRunMultiPeriod()">Run ramp-constrained multi-period dispatch →</button></div>
   </div>
   <div id="mp-empty" class="empty-note" style="padding:36px;">Run the multi-period dispatch to see the schedule.</div>
@@ -227,6 +230,8 @@ footer{margin-top:30px;text-align:center;color:var(--muted);font-family:var(--fo
       <div><label>Spinning reserve margin (%)</label><input type="number" id="uc-reserve-margin" value="10" step="any"></div>
       <div><label>Commitment load curve</label><input type="text" id="uc-loadcurve" value="210,205,200,198,205,220,260,310,360,400,420,430,425,415,395,375,355,380,405,385,340,300,260,230"></div>
     </div>
+    <div class="note" style="margin:6px 0 0;">For a demonstrative commitment schedule showing units turning ON/OFF, ensure demand varies enough that no single unit's Pmax covers the full range — try a peak near 900-1000 MW and a low near 200-300 MW.</div>
+    <div class="toggle-row"><input type="checkbox" id="uc-force-two"><span>Force minimum 2 units online</span></div>
     <div style="margin-top:10px;"><button class="btn-primary" onclick="onRunUnitCommitment()">Run unit commitment dispatch →</button></div>
   </div>
   <div id="uc-empty" class="empty-note" style="padding:36px;">Run the unit commitment dispatch to see the schedule.</div>
@@ -296,7 +301,7 @@ footer{margin-top:30px;text-align:center;color:var(--muted);font-family:var(--fo
 /* =========================================================================
    STATE
 ========================================================================= */
-let generators = [];   // {a,b,c,pmin,pmax, ppz:[[lo,hi],...], rampUp, rampDown, valveE, valveF}
+let generators = [];   // {a,b,c,pmin,pmax, ppz:[[lo,hi],...], rampUp, rampDown, valveE, valveF, minUpTime, minDownTime, startupCost}
 let Bmatrix = [];       // n x n loss coefficients
 let B0i = [];           // Kron linear loss coefficients
 let B00 = 0;            // Kron constant loss term
@@ -305,6 +310,7 @@ let lossesEnabled = false;
 let valveEnabled = false;
 let lastLambdaResult = null;
 let lastMetaResults = null; // {GA:{...}, PSO:{...}, GWO:{...}, DE:{...}, 'Vortex Search':{...}}
+let currentUCSchedule = null; // { status, dispatch, demands, hourlyCost, allOnCost, ucTotal, mpUcCost }
 
 /* =========================================================================
    TAB SWITCHING
@@ -315,6 +321,19 @@ function switchTab(name){
     document.getElementById('tab-'+t).classList.toggle('hidden', t!==name);
   });
   if(name==='constraints' || name==='unitcommitment') renderConstraintTables();
+  renderMPUCBadge();
+}
+
+function renderMPUCBadge(){
+  const badge = document.getElementById('mp-uc-badge');
+  const useUC = document.getElementById('mp-use-uc')?.checked;
+  if(!badge) return;
+  badge.classList.toggle('hidden', !useUC);
+  if(useUC){
+    badge.textContent = currentUCSchedule && currentUCSchedule.status ?
+      'Using commitment schedule from Unit Commitment tab.' :
+      'Using commitment schedule from Unit Commitment tab. Run UC first to apply it.';
+  }
 }
 
 /* ===========================================================
@@ -806,25 +825,32 @@ function onRunMultiPeriod(){
   const demands = document.getElementById('in-loadcurve').value.split(',').map(s=>parseFloat(s.trim())).filter(x=>!isNaN(x));
   if(demands.length===0){ alert('Enter a valid load curve.'); return; }
 
-  let prevPower = generators.map(g=>g.pmin);
-  const schedule = []; // per period: {power:[...], cost, demand}
-
-  demands.forEach(d=>{
-    // build temp gens with ramp-adjusted pmin/pmax for this period
-    const tempGens = generators.map((g,i)=>({
-      ...g,
-      pmin: Math.max(g.pmin, prevPower[i]-g.rampDown),
-      pmax: Math.min(g.pmax, prevPower[i]+g.rampUp)
-    }));
-    const r = solveLambda(tempGens, d);
-    if(r.ok){
-      schedule.push({power:r.power, cost:r.totalCost, demand:d});
-      prevPower = r.power;
-    } else {
-      schedule.push({power:prevPower.slice(), cost:null, demand:d});
+  const useUCSchedule = document.getElementById('mp-use-uc')?.checked;
+  let schedule = [];
+  if(useUCSchedule){
+    const ucSchedule = runMultiPeriodWithUCSchedule(demands);
+    if(!ucSchedule){
+      alert('Unit Commitment schedule not available for this load curve. Run UC first and ensure the same number of hours.');
+      return;
     }
-  });
+    schedule = ucSchedule;
+  } else {
+    let prevPower = generators.map(g=>g.pmin);
+    schedule = demands.map(d=>{
+      const tempGens = generators.map((g,i)=>({
+        ...g,
+        pmin: Math.max(g.pmin, prevPower[i]-g.rampDown),
+        pmax: Math.min(g.pmax, prevPower[i]+g.rampUp)
+      }));
+      const r = solveLambda(tempGens, d);
+      const power = r.ok ? r.power : prevPower.slice();
+      const cost = r.ok ? r.totalCost : null;
+      if(r.ok) prevPower = r.power;
+      return {power, cost, demand:d};
+    });
+  }
 
+  renderMPUCBadge();
   document.getElementById('mp-empty').classList.add('hidden');
   document.getElementById('mp-result').classList.remove('hidden');
 
@@ -913,11 +939,16 @@ function renderUCScheduleTable(status, demands){
   return html;
 }
 
-function renderUCCostComparison(ucCost, allOnCost){
-  return `<thead><tr><th>Scenario</th><th>Total daily cost (₹)</th><th>Difference</th></tr></thead><tbody>
+function renderUCCostComparison(ucCost, allOnCost, mpUcCost){
+  let html = `<thead><tr><th>Scenario</th><th>Total daily cost (₹)</th><th>Difference</th></tr></thead><tbody>
     <tr><td>Unit Commitment</td><td>${ucCost.toFixed(0)}</td><td>${(ucCost-allOnCost).toFixed(0)}</td></tr>
-    <tr><td>All units always ON</td><td>${allOnCost.toFixed(0)}</td><td>—</td></tr>
-  </tbody>`;
+    <tr><td>All units always ON</td><td>${allOnCost.toFixed(0)}</td><td>—</td></tr>`;
+  if(mpUcCost !== null){
+    html += `
+      <tr><td>Multi-Period (with UC schedule applied)</td><td>${mpUcCost.toFixed(0)}</td><td>${(mpUcCost-allOnCost).toFixed(0)}</td></tr>`;
+  }
+  html += '</tbody>';
+  return html;
 }
 
 function runAllOnMultiPeriod(demands){
@@ -936,6 +967,42 @@ function runAllOnMultiPeriod(demands){
   return schedule;
 }
 
+function runMultiPeriodWithUCSchedule(demands){
+  if(!currentUCSchedule || !currentUCSchedule.status) return null;
+  if(currentUCSchedule.demands.length !== demands.length) return null;
+  let prevPower = generators.map(g=>g.pmin);
+  const schedule=[];
+
+  demands.forEach((d,h)=>{
+    const hourStatus = currentUCSchedule.status[h];
+    const indices = hourStatus.map((on,i)=> on ? i : -1).filter(i=>i>=0);
+    const tempGens=[];
+    indices.forEach(i=>{
+      const g = generators[i];
+      const stayingOn = h>0 && currentUCSchedule.status[h-1][i];
+      let pminEff = g.pmin;
+      let pmaxEff = g.pmax;
+      if(stayingOn){
+        pminEff = Math.max(g.pmin, prevPower[i]-g.rampDown);
+        pmaxEff = Math.min(g.pmax, prevPower[i]+g.rampUp);
+      }
+      if(pmaxEff < pminEff){ pmaxEff = pminEff; }
+      tempGens.push({...g,pmin:pminEff,pmax:pmaxEff});
+    });
+
+    const r = solveLambdaSubset(tempGens, d, indices);
+    if(r.ok){
+      const powerRow = new Array(generators.length).fill(0);
+      indices.forEach((i,j)=> powerRow[i] = r.power[j]);
+      schedule.push({power:powerRow,cost:r.totalCost,demand:d});
+      prevPower = powerRow;
+    } else {
+      schedule.push({power:prevPower.slice(),cost:null,demand:d});
+    }
+  });
+  return schedule;
+}
+
 function onRunUnitCommitment(){
   if(generators.length===0){ alert('Add generators first.'); return; }
   const demands = document.getElementById('uc-loadcurve').value.split(',').map(s=>parseFloat(s.trim())).filter(x=>!isNaN(x));
@@ -943,6 +1010,7 @@ function onRunUnitCommitment(){
   lossesEnabled = document.getElementById('toggle-losses').checked;
   valveEnabled = document.getElementById('toggle-valve').checked;
   const reserveMargin = parseFloat(document.getElementById('uc-reserve-margin').value) || 10;
+  const forceMinTwo = document.getElementById('uc-force-two')?.checked;
 
   const priority = generators.map((g,i)=>(
     {i, avg: averageFullLoadCost(g)}
@@ -983,6 +1051,15 @@ function onRunUnitCommitment(){
       committed.add(cand.i);
       committedPmax += g.pmax;
       committedPmin += g.pmin;
+    }
+    if(forceMinTwo && committed.size < 2){
+      for(const cand of priority){
+        if(committed.has(cand.i) || forcedOff.has(cand.i)) continue;
+        committed.add(cand.i);
+        committedPmax += generators[cand.i].pmax;
+        committedPmin += generators[cand.i].pmin;
+        if(committed.size >= 2) break;
+      }
     }
 
     const indices=[];
@@ -1026,12 +1103,20 @@ function onRunUnitCommitment(){
   const allOnCost = allOnSchedule.reduce((s,h)=>s + (h.cost || 0),0);
   const ucTotal = hourlyCost.reduce((s,c)=>s+c,0);
 
+  const mpUcSchedule = runMultiPeriodWithUCSchedule(demands);
+  const mpUcCost = mpUcSchedule ? mpUcSchedule.reduce((s,h)=>s+(h.cost||0),0) : null;
+
+  currentUCSchedule = {
+    status, dispatch, demands, hourlyCost, allOnCost, ucTotal, mpUcCost
+  };
+  renderMPUCBadge();
+
   document.getElementById('uc-empty').classList.add('hidden');
   document.getElementById('uc-result').classList.remove('hidden');
   document.getElementById('uc-schedule-table').innerHTML = renderUCScheduleTable(status, demands);
-  document.getElementById('uc-compare-table').innerHTML = renderUCCostComparison(ucTotal, allOnCost);
+  document.getElementById('uc-compare-table').innerHTML = renderUCCostComparison(ucTotal, allOnCost, mpUcCost);
 
-  const chartHours = demands.map((_,i)=>i+1);
+  const chartHours = demands.map((_,h)=>h+1);
   const colors=['#0E8C82','#C1652B','#1E3A5F','#8AA6C2','#B08968','#6FBF73'];
   const stackTraces = generators.map((g,i)=>({
     x:chartHours,
@@ -1042,10 +1127,10 @@ function onRunUnitCommitment(){
     line:{width:0.5,color:colors[i%colors.length]},
     fillcolor:colors[i%colors.length]
   }));
-  stackTraces.push({x:hours,y:demands,mode:'lines',name:'Demand',line:{color:'#16202A',width:2,dash:'dot'}});
+  stackTraces.push({x:chartHours,y:demands,mode:'lines',name:'Demand',line:{color:'#16202A',width:2,dash:'dot'}});
   Plotly.newPlot('plot-uc-stack', stackTraces, baseLayout('Hour','MW'), {displayModeBar:false,responsive:true});
 
-  Plotly.newPlot('plot-uc-cost', [{x:hours,y:hourlyCost,type:'bar',marker:{color:'#C1652B'}}], baseLayout('Hour','Cost (₹/h)'), {displayModeBar:false,responsive:true});
+  Plotly.newPlot('plot-uc-cost', [{x:chartHours,y:hourlyCost,type:'bar',marker:{color:'#C1652B'}}], baseLayout('Hour','Cost (₹/h)'), {displayModeBar:false,responsive:true});
 }
 
 /* =========================================================================
