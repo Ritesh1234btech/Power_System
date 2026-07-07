@@ -97,7 +97,7 @@ footer{margin-top:30px;text-align:center;color:var(--muted);font-family:var(--fo
     <div class="badge">VALVE-POINT MODEL</div>
     <div class="badge">MULTI-RUN STATS</div>
   </div>
-  <button class="btn-gold no-print" onclick="exportReport()">⤓ Export report (PDF)</button>
+  <button type="button" class="btn-gold no-print" onclick="exportReport()">⤓ Export report (PDF)</button>
 </header>
 
 <div class="tabbar">
@@ -119,16 +119,16 @@ footer{margin-top:30px;text-align:center;color:var(--muted);font-family:var(--fo
       <div><label>a (₹/MW²h)</label><input type="number" id="in-a" step="any" placeholder="0.0080"></div>
       <div><label>b (₹/MWh)</label><input type="number" id="in-b" step="any" placeholder="2.0"></div>
       <div><label>c (₹/h)</label><input type="number" id="in-c" step="any" placeholder="25"></div>
-      <div style="display:flex;align-items:flex-end;"><button class="btn-primary" onclick="onAddGenerator()">+ Add generator</button></div>
+      <div style="display:flex;align-items:flex-end;"><button type="button" class="btn-primary" onclick="onAddGenerator()">+ Add generator</button></div>
     </div>
     <div class="grid2">
       <div><label>Pmin (MW)</label><input type="number" id="in-pmin" step="any" placeholder="10"></div>
       <div><label>Pmax (MW)</label><input type="number" id="in-pmax" step="any" placeholder="85"></div>
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin:10px 0;">
-      <button onclick="loadSample3()">Load custom 3-gen system</button>
-      <button onclick="loadIEEE6()">Load standard 6-unit benchmark system</button>
-      <button class="btn-danger" onclick="clearAll()">Clear all</button>
+      <button type="button" onclick="loadSample3()">Load custom 3-gen system</button>
+      <button type="button" onclick="loadIEEE6()">Load standard 6-unit benchmark system</button>
+      <button type="button" class="btn-danger" onclick="clearAll()">Clear all</button>
     </div>
     <table id="gen-table"></table>
     <div id="gen-empty" class="empty-note">No generators yet.</div>
@@ -182,7 +182,7 @@ footer{margin-top:30px;text-align:center;color:var(--muted);font-family:var(--fo
 
 <!-- ============ TAB 3: λ DISPATCH ============ -->
 <div id="tab-dispatch" class="tab-panel hidden">
-  <div class="panel"><button class="btn-primary" onclick="onSolveLambda()">Run λ-iteration dispatch →</button></div>
+  <div class="panel"><button type="button" class="btn-primary" onclick="onSolveLambda()">Run λ-iteration dispatch →</button></div>
   <div id="no-result-note" class="empty-note" style="padding:36px;">Run the dispatch to see results.</div>
   <div id="lambda-result" class="hidden">
     <div class="stats-strip">
@@ -218,11 +218,11 @@ footer{margin-top:30px;text-align:center;color:var(--muted);font-family:var(--fo
       <button type="button" class="btn-icon preset-button" data-preset-target="mp" data-preset="peak" onclick="applyLoadCurvePreset('peak','mp')">Peak Stress Day</button>
       <button type="button" class="btn-icon preset-button" data-preset-target="mp" data-preset="double" onclick="applyLoadCurvePreset('double','mp')">Double Peak</button>
     </div>
-    <input type="text" id="in-loadcurve" value="420,410,405,400,410,440,520,610,680,720,740,750,745,730,710,690,670,700,730,690,620,540,470,430">
+    <input type="text" id="in-loadcurve" oninput="clearLoadCurvePreset('mp')" value="420,410,405,400,410,440,520,610,680,720,740,750,745,730,710,690,670,700,730,690,620,540,470,430">
     <div class="note" style="margin:6px 0 0;">For a demonstrative commitment schedule showing units turning ON/OFF, ensure demand varies enough that no single unit's Pmax covers the full range — try a peak near 900-1000 MW and a low near 200-300 MW.</div>
     <div class="toggle-row"><input type="checkbox" id="mp-use-uc" onchange="renderMPUCBadge()"><span>Use Unit Commitment schedule</span></div>
     <div id="mp-uc-badge" class="note hidden" style="font-weight:700;color:var(--copper);">Using commitment schedule from Unit Commitment tab.</div>
-    <div style="margin-top:10px;"><button class="btn-primary" onclick="onRunMultiPeriod()">Run ramp-constrained multi-period dispatch →</button></div>
+    <div style="margin-top:10px;"><button type="button" class="btn-primary" onclick="onRunMultiPeriod()">Run ramp-constrained multi-period dispatch →</button></div>
   </div>
   <div id="mp-empty" class="empty-note" style="padding:36px;">Run the multi-period dispatch to see the schedule.</div>
   <div id="mp-result" class="hidden">
@@ -251,7 +251,7 @@ footer{margin-top:30px;text-align:center;color:var(--muted);font-family:var(--fo
     <div id="uc-manual-instructions" class="note hidden" style="margin:0;padding:0;">Click cells below to toggle ON/OFF. Run the dispatch to apply the selected manual schedule. Infeasible hours will be flagged.</div>
     <div id="uc-manual-grid" class="panel hidden" style="margin-top:10px;padding:10px;"></div>
     <label class="toggle-row"><input type="checkbox" id="uc-force-two"><span>Force minimum 2 units online</span></label>
-    <div style="margin-top:10px;"><button class="btn-primary" onclick="onRunUnitCommitment()">Run unit commitment dispatch →</button></div>
+    <div style="margin-top:10px;"><button type="button" class="btn-primary" onclick="onRunUnitCommitment()">Run unit commitment dispatch →</button></div>
   </div>
   <div id="uc-empty" class="empty-note" style="padding:36px;">Run the unit commitment dispatch to see the schedule.</div>
   <div id="uc-result" class="hidden">
@@ -263,7 +263,7 @@ footer{margin-top:30px;text-align:center;color:var(--muted);font-family:var(--fo
     </div>
     <div id="uc-validation-panel" class="panel hidden" style="margin-top:14px;"></div>
     <div class="panel" style="margin-top:14px;">
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;"><h2>Hourly detail</h2><button class="btn-icon" id="uc-detail-toggle" onclick="toggleUCHourlyDetail()">Show details</button></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;"><h2>Hourly detail</h2><button type="button" class="btn-icon" id="uc-detail-toggle" onclick="toggleUCHourlyDetail()">Show details</button></div>
       <div id="uc-hourly-detail" class="hidden" style="margin-top:10px;"></div>
     </div>
   </div>
@@ -861,6 +861,13 @@ function onRunMultiPeriod(){
       return;
     }
     schedule = ucSchedule;
+    if(currentUCSchedule){
+      currentUCSchedule.mpUcCost = schedule.reduce((s,h)=>s + (h.cost || 0), 0);
+      if(document.getElementById('uc-compare-table')){
+        document.getElementById('uc-compare-table').innerHTML = renderUCCostComparison(currentUCSchedule.ucTotal, currentUCSchedule.allOnCost, currentUCSchedule.mpUcCost);
+      }
+      renderUCValidationPanel();
+    }
   } else {
     let prevPower = generators.map(g=>g.pmin);
     schedule = demands.map(d=>{
@@ -999,8 +1006,8 @@ function runAllOnMultiPeriod(demands){
 }
 
 function runMultiPeriodWithUCSchedule(demands){
-  if(!currentUCSchedule || !currentUCSchedule.status) return null;
-  if(currentUCSchedule.demands.length !== demands.length) return null;
+  if(!currentUCSchedule || !Array.isArray(currentUCSchedule.status) || currentUCSchedule.status.length === 0) return null;
+  if(!Array.isArray(currentUCSchedule.demands) || currentUCSchedule.demands.length !== demands.length) return null;
   let prevPower = generators.map(g=>g.pmin);
   let prevStatus = generators.map(()=>false);
   const schedule=[];
@@ -1042,6 +1049,7 @@ function runMultiPeriodWithUCSchedule(demands){
 }
 
 function onRunUnitCommitment(){
+  currentUCSchedule = null;
   if(generators.length===0){ alert('Add generators first.'); return; }
   const demands = document.getElementById('uc-loadcurve').value.split(',').map(s=>parseFloat(s.trim())).filter(x=>!isNaN(x));
   if(demands.length===0){ alert('Enter a valid commitment load curve.'); return; }
@@ -1133,15 +1141,6 @@ function onRunUnitCommitment(){
     const indices=[];
     const tempGens = [];
     const hourDetail = {hour:h+1,demand,committed:[],unitDetails:[],startupCost:0,fuelCost:0,totalCost:0,infeasible:false};
-    if(manualMode){
-      ucManualSchedule[h].forEach((on,i)=>{
-        if(on){
-          committed.add(i);
-          committedPmax += generators[i].pmax;
-          committedPmin += generators[i].pmin;
-        }
-      });
-    }
     committed.forEach(i=>{
       const g=generators[i];
       const stayingOn = manualMode ? (h>0 && ucManualSchedule[h-1][i]) : (prevStatus[i] && !forcedOff.has(i));
@@ -1256,11 +1255,27 @@ function applyLoadCurvePreset(preset, target){
   markPresetHighlight(target, preset);
 }
 
+function clearLoadCurvePreset(target){
+  if(target==='uc'){
+    selectedUCPreset = null;
+  } else {
+    selectedMPPreset = null;
+  }
+  markPresetHighlight(target, null);
+}
+
+function initPresetHighlights(){
+  markPresetHighlight('uc', selectedUCPreset);
+  markPresetHighlight('mp', selectedMPPreset);
+}
+
 function markPresetHighlight(target, preset){
   document.querySelectorAll(`.preset-button[data-preset-target="${target}"]`).forEach(btn=>{
     btn.classList.toggle('active', btn.dataset.preset===preset);
   });
 }
+
+document.addEventListener('DOMContentLoaded', initPresetHighlights);
 
 function toggleUCManualMode(){
   const enabled = document.getElementById('uc-manual-mode')?.checked;
