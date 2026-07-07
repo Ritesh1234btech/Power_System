@@ -127,12 +127,6 @@ footer{margin-top:30px;text-align:center;color:var(--muted);font-family:var(--fo
     </div>
     <table id="gen-table"></table>
     <div id="gen-empty" class="empty-note">No generators yet.</div>
-    <div class="tooltip-box">
-      <b>Benchmark note:</b> the 6-unit system uses widely-cited coefficients from ELD literature
-      (quadratic cost + valve-point + B-loss matrix). Reported costs here approximate — not guaranteed identical to any
-      single paper — since published results vary with solver tolerance, RNG seed, and constraint handling. Useful for
-      sanity-checking magnitude and behavior, not for citing as an exact reproduction.
-    </div>
   </div>
 
   <div class="panel">
@@ -788,6 +782,20 @@ function onRunMultiPeriod(){
 /* =========================================================================
    METAHEURISTIC ENGINE (shared objective, penalty-based)
 ========================================================================= */
+function normalizeToDemand(gens, demand, powers){
+  // iteratively rescale toward the demand target while respecting each unit's limits
+  let p = powers.slice();
+  for(let pass=0; pass<5; pass++){
+    const loss = transmissionLoss(p);
+    const target = demand + loss;
+    const sum = p.reduce((a,b)=>a+b,0);
+    if(sum === 0) break;
+    const factor = target / sum;
+    p = p.map((v,i)=> clamp(v*factor, gens[i].pmin, gens[i].pmax));
+  }
+  return p;
+}
+
 function objective(gens, demand, powers){
   const sumP = powers.reduce((a,b)=>a+b,0);
   const loss = transmissionLoss(powers);
@@ -796,18 +804,17 @@ function objective(gens, demand, powers){
   const ppzPenalty = powers.reduce((s,p,i)=>{
     return s + gens[i].ppz.reduce((s2,[lo,hi])=> (p>lo&&p<hi) ? s2+5000 : s2, 0);
   },0);
-  return cost + mismatch*mismatch*50 + ppzPenalty;
+  const scaledPenalty = mismatch * mismatch * Math.max(50, cost * 0.02);
+  return cost + scaledPenalty + ppzPenalty;
 }
 function clamp(p,lo,hi){ return Math.max(lo,Math.min(hi,p)); }
 function randomFeasible(gens, demand){
-  const n=gens.length; const p=new Array(n);
-  let remaining=demand;
+  const n = gens.length;
+  const p = new Array(n);
   for(let i=0;i<n;i++){
-    const lo=gens[i].pmin, hi=gens[i].pmax;
-    const v = lo + Math.random()*(hi-lo);
-    p[i]=v; remaining-=v;
+    p[i] = gens[i].pmin + Math.random()*(gens[i].pmax - gens[i].pmin);
   }
-  return p;
+  return normalizeToDemand(gens, demand, p);
 }
 
 function runGA(gens, demand, pop, iters, mutRate, recordTrace){
@@ -823,7 +830,7 @@ function runGA(gens, demand, pop, iters, mutRate, recordTrace){
       const p2=elite[Math.floor(Math.random()*elite.length)];
       let child=p1.map((v,i)=> Math.random()<0.5? v : p2[i]);
       if(Math.random()<mutRate) child=child.map((v,i)=>clamp(v+(Math.random()-0.5)*(gens[i].pmax-gens[i].pmin)*0.2, gens[i].pmin, gens[i].pmax));
-      newPop.push(child);
+      newPop.push(normalizeToDemand(gens, demand, child));
     }
     population=newPop;
   }
@@ -839,6 +846,7 @@ function runPSO(gens, demand, pop, iters, w, c1, c2, recordTrace){
   let pBestF = X.map(x=>objective(gens,demand,x));
   let gBestIdx = pBestF.indexOf(Math.min(...pBestF));
   let gBest = pBest[gBestIdx].slice();
+  let gBestF = pBestF[gBestIdx];
   const trace=[];
 
   for(let it=0;it<iters;it++){
@@ -848,11 +856,12 @@ function runPSO(gens, demand, pop, iters, w, c1, c2, recordTrace){
         V[i][d] = w*V[i][d] + c1*r1*(pBest[i][d]-X[i][d]) + c2*r2*(gBest[d]-X[i][d]);
         X[i][d] = clamp(X[i][d]+V[i][d], gens[d].pmin, gens[d].pmax);
       }
+      X[i] = normalizeToDemand(gens, demand, X[i]);
       const f = objective(gens,demand,X[i]);
       if(f<pBestF[i]){ pBestF[i]=f; pBest[i]=X[i].slice(); }
-      if(f<objective(gens,demand,gBest)) gBest=X[i].slice();
+      if(f<gBestF){ gBestF=f; gBest=X[i].slice(); }
     }
-    if(recordTrace) trace.push(objective(gens,demand,gBest));
+    if(recordTrace) trace.push(gBestF);
   }
   return {power:gBest, cost:gBest.reduce((s,p,i)=>s+unitCost(gens[i],p),0), trace};
 }
@@ -890,7 +899,7 @@ function runGWO(gens, demand, pop, iters, recordTrace){
 
         newPos[d] = clamp((X1 + X2 + X3) / 3, gens[d].pmin, gens[d].pmax);
       }
-      return newPos;
+      return normalizeToDemand(gens, demand, newPos);
     });
   }
 
@@ -920,11 +929,12 @@ function runDE(gens, demand, pop, iters, F, CR, recordTrace){
         mutant[d] = clamp(population[r1][d] + F * (population[r2][d] - population[r3][d]), gens[d].pmin, gens[d].pmax);
       }
 
-      const trial = population[i].slice();
+      let trial = population[i].slice();
       const jRand = Math.floor(Math.random()*n);
       for(let d=0; d<n; d++){
         if(Math.random() < CR || d === jRand) trial[d] = mutant[d];
       }
+      trial = normalizeToDemand(gens, demand, trial);
 
       const trialF = objective(gens, demand, trial);
       if(trialF < fitness[i]){
@@ -950,7 +960,7 @@ function gaussianRandom(mean, std){
 
 function runVortexSearch(gens, demand, pop, iters, recordTrace){
   const n = gens.length;
-  let center = gens.map(g => (g.pmin + g.pmax) / 2);
+  let center = normalizeToDemand(gens, demand, gens.map(g => (g.pmin + g.pmax) / 2));
   let bestSol = center.slice();
   let bestF = objective(gens, demand, bestSol);
   const trace = [];
@@ -959,11 +969,12 @@ function runVortexSearch(gens, demand, pop, iters, recordTrace){
     const progress = it / iters;
     const radiusScale = Math.pow(1 - progress, 3);
     const candidates = Array.from({length:pop}, () => {
-      return center.map((c,d) => {
+      const raw = center.map((c,d) => {
         const range = gens[d].pmax - gens[d].pmin;
         const std = Math.max(0.001, radiusScale * range * 0.5);
         return clamp(gaussianRandom(c, std), gens[d].pmin, gens[d].pmax);
       });
+      return normalizeToDemand(gens, demand, raw);
     });
 
     candidates.forEach(cand => {
@@ -992,6 +1003,9 @@ function onRunMetaSuite(){
   const demand=parseFloat(document.getElementById('in-demand').value);
   if(isNaN(demand)){ alert('Enter a demand value in Setup tab.'); return; }
 
+  lossesEnabled = document.getElementById('toggle-losses').checked;
+  valveEnabled = document.getElementById('toggle-valve').checked;
+
   const pop=parseInt(document.getElementById('meta-pop').value)||25;
   const iters=parseInt(document.getElementById('meta-iters').value)||80;
   const runs=parseInt(document.getElementById('meta-runs').value)||20;
@@ -1012,16 +1026,21 @@ function onRunMetaSuite(){
 
   const results = {};
   Object.entries(algos).forEach(([name,fn])=>{
-    const costs=[]; const times=[]; let convergenceSum=null;
+    const costs=[]; const times=[]; const powerVectors=[]; let convergenceSum=null;
     for(let r=0;r<runs;r++){
       const t0=performance.now();
-      const recordTrace = r===0; // only record trace on first run to keep it light
+      const recordTrace = r===0;
       const out = fn(recordTrace);
       const t1=performance.now();
-      costs.push(out.cost); times.push(t1-t0);
+      costs.push(out.cost); times.push(t1-t0); powerVectors.push(out.power);
       if(recordTrace) convergenceSum = out.trace;
     }
-    results[name] = {costs, times, trace:convergenceSum, stats:stats(costs), meanTime: times.reduce((a,b)=>a+b,0)/times.length};
+    const bestRunIdx = costs.indexOf(Math.min(...costs));
+    results[name] = {
+      costs, times, trace:convergenceSum, stats:stats(costs),
+      meanTime: times.reduce((a,b)=>a+b,0)/times.length,
+      bestPower: powerVectors[bestRunIdx]
+    };
   });
 
   lastMetaResults = results;
@@ -1059,12 +1078,13 @@ function renderComparisonTab(demand){
 
   const rows = [{name:'λ-Iteration', cost:lastLambdaResult.totalCost, loss:lastLambdaResult.loss, time:0.5, std:0}];
   Object.entries(lastMetaResults).forEach(([name,r])=>{
-    rows.push({name, cost:r.stats.mean, loss:transmissionLoss(r.costs?[]:[]), time:r.meanTime, std:r.stats.std});
+    const loss = r.bestPower ? transmissionLoss(r.bestPower) : 0;
+    rows.push({name, cost:r.stats.mean, loss, time:r.meanTime, std:r.stats.std});
   });
 
   let html=`<thead><tr><th>Method</th><th>Cost (₹/h)</th><th>Loss (MW)</th><th>Mean time (ms)</th><th>Std dev (robustness)</th></tr></thead><tbody>`;
   rows.forEach(r=>{
-    html+=`<tr><td class="gen-tag">${r.name}</td><td>${r.cost.toFixed(2)}</td><td>${r.name==='λ-Iteration'?lastLambdaResult.loss.toFixed(2):'—'}</td><td>${r.time.toFixed(2)}</td><td>${r.std.toFixed(2)}</td></tr>`;
+    html+=`<tr><td class="gen-tag">${r.name}</td><td>${r.cost.toFixed(2)}</td><td>${r.loss.toFixed(2)}</td><td>${r.time.toFixed(2)}</td><td>${r.std.toFixed(2)}</td></tr>`;
   });
   document.getElementById('cmp-table').innerHTML=html+'</tbody>';
 
@@ -1072,21 +1092,30 @@ function renderComparisonTab(demand){
   boxTraces.push({y:[lastLambdaResult.totalCost], type:'box', name:'λ-Iteration', boxpoints:'all'});
   Plotly.newPlot('plot-cmp-box', boxTraces, baseLayout('','Cost (₹/h)'), {displayModeBar:false,responsive:true});
 
-  // simple radar-style via scatterpolar: normalize cost(lower better->invert), speed(lower time better->invert), robustness(lower std better->invert)
   const allCosts=rows.map(r=>r.cost), allTimes=rows.map(r=>r.time+0.001), allStd=rows.map(r=>r.std+0.001);
   const norm=(v,arr)=> 1 - (v-Math.min(...arr))/((Math.max(...arr)-Math.min(...arr))||1);
-  const radarTraces = rows.map(r=>({
+  const radarColors = ['rgba(30,58,95,0.24)','rgba(193,101,43,0.2)','rgba(14,140,130,0.22)','rgba(216,160,61,0.2)','rgba(122,93,199,0.22)','rgba(109,191,115,0.18)'];
+  const lineColors = ['#1E3A5F','#C1652B','#0E8C82','#D8A03D','#7A5DC7','#6FBF73'];
+  const radarTraces = rows.map((r,i)=>({
     type:'scatterpolar',
     r:[norm(r.cost,allCosts), norm(r.time,allTimes), norm(r.std,allStd), norm(r.cost,allCosts)],
     theta:['Cost efficiency','Speed','Robustness','Cost efficiency'],
-    fill:'toself', name:r.name
+    fill:'toself',
+    fillcolor:radarColors[i % radarColors.length],
+    line:{color:lineColors[i % lineColors.length], width:2},
+    marker:{color:lineColors[i % lineColors.length], size:6},
+    name:r.name
   }));
   Plotly.newPlot('plot-cmp-radar', radarTraces, {
-    polar:{radialaxis:{visible:true, range:[0,1]}},
-    paper_bgcolor:'transparent', font:{family:'IBM Plex Mono',size:10,color:'#5B6B7C'}, showlegend:true
+    polar:{
+      radialaxis:{visible:true, range:[0,1], tickcolor:'#DCE1E8', gridcolor:'#DCE1E8', linecolor:'#B0BFCB', nticks:5},
+      angularaxis:{tickfont:{color:'#5B6B7C'}, gridcolor:'#E9EDF1', linecolor:'#B0BFCB'}
+    },
+    paper_bgcolor:'transparent', plot_bgcolor:'transparent',
+    font:{family:'IBM Plex Mono',size:10,color:'#5B6B7C'},
+    legend:{orientation:'h', x:0.5, xanchor:'center', y:-0.2, font:{size:9}}
   }, {displayModeBar:false,responsive:true});
 
-  // sensitivity sweep
   const [loPct,hiPct] = document.getElementById('in-sweep-range').value.split(',').map(Number);
   const lo=(loPct||80)/100, hi=(hiPct||120)/100;
   const points=9; const xs=[];
