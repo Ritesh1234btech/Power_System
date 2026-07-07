@@ -599,15 +599,17 @@ function snapOutOfPPZ(g,p){
 
 function transmissionLoss(powers){
   if(!lossesEnabled || Bmatrix.length===0) return 0;
-  let loss=0;
+  let lossPu=0;
   for(let i=0;i<powers.length;i++){
+    const piPu = powers[i] / 100;
     for(let j=0;j<powers.length;j++){
-      loss += powers[i]*(Bmatrix[i]?.[j] ?? 0)*powers[j];
+      const pjPu = powers[j] / 100;
+      lossPu += piPu * (Bmatrix[i]?.[j] ?? 0) * pjPu;
     }
-    loss += powers[i]*(B0i[i] ?? 0);
+    lossPu += piPu * (B0i[i] ?? 0);
   }
-  loss += B00 || 0;
-  return loss;
+  lossPu += B00 || 0;
+  return lossPu * 100;
 }
 
 /* =========================================================================
