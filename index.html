@@ -270,6 +270,9 @@ footer{margin-top:30px;text-align:center;color:var(--muted);font-family:var(--fo
 ========================================================================= */
 let generators = [];   // {a,b,c,pmin,pmax, ppz:[[lo,hi],...], rampUp, rampDown, valveE, valveF}
 let Bmatrix = [];       // n x n loss coefficients
+let B0i = [];           // Kron linear loss coefficients
+let B00 = 0;            // Kron constant loss term
+let usingBenchmarkMatrix = false;
 let lossesEnabled = false;
 let valveEnabled = false;
 let lastLambdaResult = null;
@@ -465,6 +468,7 @@ function removeGenerator(i){ generators.splice(i,1); rebuildBMatrix(); renderGen
 function clearAll(){ generators=[]; Bmatrix=[]; renderGeneratorTable(); renderConstraintTables(); }
 
 function loadSample3(){
+  usingBenchmarkMatrix = false;
   generators=[
     {a:0.0080,b:2.0,c:25, pmin:10,pmax:85, ppz:[[35,45]], rampUp:30,rampDown:30, valveE:20,valveF:0.045},
     {a:0.0096,b:1.6,c:60, pmin:10,pmax:80, ppz:[], rampUp:25,rampDown:25, valveE:18,valveF:0.042},
@@ -474,29 +478,36 @@ function loadSample3(){
   rebuildBMatrix(); renderGeneratorTable(); renderConstraintTables();
 }
 
-/* Widely-cited 6-unit ELD benchmark coefficients (approximate, literature-style) */
+/*
+  Source: Al-Roomi, A.R. (2016), Economic Load Dispatch Test Systems Repository,
+  Dalhousie University — data from Gaing, Z-L. (2003), IEEE Trans. Power Syst., 18(3), 1187-1195.
+*/
 function loadIEEE6(){
   generators=[
-    {a:0.00375,b:2.00,c:756.799, pmin:100,pmax:500, ppz:[[225,235]],           rampUp:80,rampDown:80, valveE:105,valveF:0.0315},
-    {a:0.01750,b:1.75,c:451.325, pmin:50, pmax:200, ppz:[[95,105]],            rampUp:50,rampDown:50, valveE:98, valveF:0.0350},
-    {a:0.06250,b:1.00,c:1049.998,pmin:80, pmax:300, ppz:[[155,165]],           rampUp:65,rampDown:65, valveE:100,valveF:0.0400},
-    {a:0.00834,b:3.25,c:1243.531,pmin:50, pmax:150, ppz:[],                    rampUp:40,rampDown:40, valveE:90, valveF:0.0380},
-    {a:0.02500,b:3.00,c:1658.569,pmin:50, pmax:200, ppz:[[105,115]],           rampUp:45,rampDown:45, valveE:96, valveF:0.0370},
-    {a:0.02500,b:3.00,c:1356.659,pmin:50, pmax:120, ppz:[],                    rampUp:35,rampDown:35, valveE:92, valveF:0.0360}
+    {a:0.0070,b:7.0,c:240, pmin:100,pmax:500, ppz:[[210,240],[350,380]], rampUp:80,rampDown:120, valveE:300,valveF:0.031},
+    {a:0.0095,b:10.0,c:200, pmin:50, pmax:200, ppz:[[90,110],[140,160]], rampUp:50,rampDown:90, valveE:200,valveF:0.042},
+    {a:0.0090,b:8.5,c:220, pmin:80, pmax:300, ppz:[[150,170],[210,240]], rampUp:65,rampDown:100, valveE:150,valveF:0.063},
+    {a:0.0090,b:11.0,c:200, pmin:50, pmax:150, ppz:[[80,90],[110,120]],   rampUp:50,rampDown:90, valveE:150,valveF:0.063},
+    {a:0.0080,b:10.5,c:220, pmin:50, pmax:200, ppz:[[90,110],[140,150]], rampUp:50,rampDown:90, valveE:150,valveF:0.063},
+    {a:0.0075,b:12.0,c:190, pmin:50, pmax:120, ppz:[[75,85],[100,105]],   rampUp:50,rampDown:90, valveE:150,valveF:0.063}
   ];
   Bmatrix=[
-    [0.000049,0.000014,0.000015,0.000015,0.000016,0.000017],
-    [0.000014,0.000045,0.000016,0.000016,0.000017,0.000015],
-    [0.000015,0.000016,0.000039,0.000010,0.000012,0.000012],
-    [0.000015,0.000016,0.000010,0.000040,0.000014,0.000010],
-    [0.000016,0.000017,0.000012,0.000014,0.000035,0.000011],
-    [0.000017,0.000015,0.000012,0.000010,0.000011,0.000036]
+    [0.0017, 0.0012, 0.0007, -0.0001, -0.0005, -0.0002],
+    [0.0012, 0.0014, 0.0009,  0.0001, -0.0006, -0.0001],
+    [0.0007, 0.0009, 0.0031,  0.0000, -0.0010, -0.0006],
+    [-0.0001,0.0001, 0.0000,  0.0024, -0.0006, -0.0008],
+    [-0.0005,-0.0006,-0.0010,-0.0006, 0.0129, -0.0002],
+    [-0.0002,-0.0001,-0.0006,-0.0008,-0.0002, 0.0150]
   ];
-  document.getElementById('in-demand').value=700;
+  B0i = [-0.0003908, -0.0001297, 0.0007047, 0.0000591, 0.0002161, -0.0006635];
+  B00 = 0.056;
+  usingBenchmarkMatrix = true;
+  document.getElementById('in-demand').value=1263;
   renderGeneratorTable(); renderConstraintTables();
 }
 
 function rebuildBMatrix(){
+  if(usingBenchmarkMatrix) return;
   const n=generators.length;
   Bmatrix = Array.from({length:n},(_,i)=>Array.from({length:n},(_,j)=> i===j? 0.0002 + 0.00005*i : 0.00001));
 }
@@ -522,9 +533,13 @@ function renderConstraintTables(){
   const bbox=document.getElementById('bmatrix-box');
   if(generators.length===0){ bbox.innerHTML='<div class="empty-note">Add generators first.</div>'; }
   else{
-    let html='<table><thead><tr><th></th>'+generators.map((_,j)=>`<th>G${j+1}</th>`).join('')+'</tr></thead><tbody>';
+    let html='';
+    if(usingBenchmarkMatrix){
+      html += '<div class="note">Using literature B-coefficients (Gaing 2003, 1263 MW system) with B0i and B00 linear/constant loss terms included.</div>';
+    }
+    html += '<table><thead><tr><th></th>'+generators.map((_,j)=>`<th>G${j+1}</th>`).join('')+'</tr></thead><tbody>';
     Bmatrix.forEach((row,i)=>{
-      html+=`<tr><td class="gen-tag">G${i+1}</td>`+row.map((v,j)=>`<td><input type="number" step="any" value="${v}" style="width:80px;" onchange="Bmatrix[${i}][${j}]=parseFloat(this.value)||0"></td>`).join('')+'</tr>';
+      html+=`<tr><td class="gen-tag">G${i+1}</td>`+row.map((v,j)=>`<td><input type="number" step="any" value="${v.toFixed(6)}" style="width:80px;" onchange="Bmatrix[${i}][${j}]=parseFloat(this.value)||0"></td>`).join('')+'</tr>';
     });
     bbox.innerHTML=html+'</tbody></table>';
   }
@@ -585,9 +600,13 @@ function snapOutOfPPZ(g,p){
 function transmissionLoss(powers){
   if(!lossesEnabled || Bmatrix.length===0) return 0;
   let loss=0;
-  for(let i=0;i<powers.length;i++)
-    for(let j=0;j<powers.length;j++)
+  for(let i=0;i<powers.length;i++){
+    for(let j=0;j<powers.length;j++){
       loss += powers[i]*(Bmatrix[i]?.[j] ?? 0)*powers[j];
+    }
+    loss += powers[i]*(B0i[i] ?? 0);
+  }
+  loss += B00 || 0;
   return loss;
 }
 
