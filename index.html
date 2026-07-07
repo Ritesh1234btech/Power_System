@@ -101,8 +101,9 @@ footer{margin-top:30px;text-align:center;color:var(--muted);font-family:var(--fo
   <div class="tab" data-tab="constraints" onclick="switchTab('constraints')">2. Constraints</div>
   <div class="tab" data-tab="dispatch" onclick="switchTab('dispatch')">3. λ Dispatch</div>
   <div class="tab" data-tab="multiperiod" onclick="switchTab('multiperiod')">4. Multi-Period / Ramp</div>
-  <div class="tab" data-tab="meta" onclick="switchTab('meta')">5. Metaheuristics</div>
-  <div class="tab" data-tab="compare" onclick="switchTab('compare')">6. Comparison</div>
+  <div class="tab" data-tab="unitcommitment" onclick="switchTab('unitcommitment')">5. Unit Commitment</div>
+  <div class="tab" data-tab="meta" onclick="switchTab('meta')">6. Metaheuristics</div>
+  <div class="tab" data-tab="compare" onclick="switchTab('compare')">7. Comparison</div>
 </div>
 
 <!-- ============ TAB 1: SETUP ============ -->
@@ -133,7 +134,7 @@ footer{margin-top:30px;text-align:center;color:var(--muted);font-family:var(--fo
     <h2>System Demand</h2>
     <div class="grid3">
       <div><label>Base demand P<sub>D</sub> (MW)</label><input type="number" id="in-demand" step="any" placeholder="e.g. 700"></div>
-      <div><label>Spinning reserve requirement (MW)</label><input type="number" id="in-reserve" step="any" value="0"></div>
+      <div><label>Spinning reserve margin (%)</label><input type="number" id="in-reserve" step="any" value="10"></div>
       <div><label>Demand sweep range for sensitivity (% of base)</label><input type="text" id="in-sweep-range" value="80,120"></div>
     </div>
   </div>
@@ -167,6 +168,11 @@ footer{margin-top:30px;text-align:center;color:var(--muted);font-family:var(--fo
       <p class="note">Max MW a unit can change between consecutive periods — used in the Multi-Period tab. Up/down limits in MW per period.</p>
       <div id="ramp-table"></div>
     </div>
+  </div>
+  <div class="panel">
+    <h2>Commitment Constraints</h2>
+    <p class="note">Minimum up/down times and startup cost for unit commitment.</p>
+    <div id="commitment-table"></div>
   </div>
 </div>
 
@@ -212,7 +218,29 @@ footer{margin-top:30px;text-align:center;color:var(--muted);font-family:var(--fo
   </div>
 </div>
 
-<!-- ============ TAB 5: METAHEURISTICS ============ -->
+<!-- ============ TAB 5: UNIT COMMITMENT ============ -->
+<div id="tab-unitcommitment" class="tab-panel hidden">
+  <div class="panel">
+    <h2>Unit Commitment Overview</h2>
+    <p class="note">Commit units by priority order, then dispatch only the online units each hour using the existing λ-iteration solver.</p>
+    <div class="grid2">
+      <div><label>Spinning reserve margin (%)</label><input type="number" id="uc-reserve-margin" value="10" step="any"></div>
+      <div><label>Commitment load curve</label><input type="text" id="uc-loadcurve" value="210,205,200,198,205,220,260,310,360,400,420,430,425,415,395,375,355,380,405,385,340,300,260,230"></div>
+    </div>
+    <div style="margin-top:10px;"><button class="btn-primary" onclick="onRunUnitCommitment()">Run unit commitment dispatch →</button></div>
+  </div>
+  <div id="uc-empty" class="empty-note" style="padding:36px;">Run the unit commitment dispatch to see the schedule.</div>
+  <div id="uc-result" class="hidden">
+    <div class="panel"><h2>Commitment Schedule</h2><div id="uc-schedule-table"></div></div>
+    <div class="plot-box"><div id="plot-uc-stack" style="height:340px;"></div><div class="cap">Committed generation schedule (stacked area, zero when unit is off)</div></div>
+    <div class="plots-2" style="margin-top:14px;">
+      <div class="plot-box"><div id="plot-uc-cost" style="height:260px;"></div><div class="cap">Hourly commitment cost (fuel + startup)</div></div>
+      <div class="panel"><h2>Cost Comparison</h2><table id="uc-compare-table"></table></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ TAB 6: METAHEURISTICS ============ -->
 <div id="tab-meta" class="tab-panel hidden">
   <div class="panel">
     <h2>Algorithm Parameters &amp; Trial Settings</h2>
@@ -283,10 +311,10 @@ let lastMetaResults = null; // {GA:{...}, PSO:{...}, GWO:{...}, DE:{...}, 'Vorte
 ========================================================================= */
 function switchTab(name){
   document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active', t.dataset.tab===name));
-  ['setup','constraints','dispatch','multiperiod','meta','compare'].forEach(t=>{
+  ['setup','constraints','dispatch','multiperiod','unitcommitment','meta','compare'].forEach(t=>{
     document.getElementById('tab-'+t).classList.toggle('hidden', t!==name);
   });
-  if(name==='constraints') renderConstraintTables();
+  if(name==='constraints' || name==='unitcommitment') renderConstraintTables();
 }
 
 /* ===========================================================
@@ -458,7 +486,7 @@ function onAddGenerator(){
   const pmin=parseFloat(document.getElementById('in-pmin').value);
   const pmax=parseFloat(document.getElementById('in-pmax').value);
   if([a,b,c,pmin,pmax].some(isNaN)){ alert('Enter valid a, b, c, Pmin, Pmax.'); return; }
-  generators.push({a,b,c,pmin,pmax,ppz:[],rampUp:pmax-pmin,rampDown:pmax-pmin,valveE:0.1*b*10,valveF:0.045});
+  generators.push({a,b,c,pmin,pmax,ppz:[],rampUp:pmax-pmin,rampDown:pmax-pmin,valveE:0.1*b*10,valveF:0.045,minUpTime:2,minDownTime:2,startupCost:1000});
   ['in-a','in-b','in-c','in-pmin','in-pmax'].forEach(id=>document.getElementById(id).value='');
   rebuildBMatrix();
   renderGeneratorTable();
@@ -470,9 +498,9 @@ function clearAll(){ generators=[]; Bmatrix=[]; renderGeneratorTable(); renderCo
 function loadSample3(){
   usingBenchmarkMatrix = false;
   generators=[
-    {a:0.0080,b:2.0,c:25, pmin:10,pmax:85, ppz:[[35,45]], rampUp:30,rampDown:30, valveE:20,valveF:0.045},
-    {a:0.0096,b:1.6,c:60, pmin:10,pmax:80, ppz:[], rampUp:25,rampDown:25, valveE:18,valveF:0.042},
-    {a:0.0110,b:1.2,c:100,pmin:10,pmax:70, ppz:[[30,40]], rampUp:20,rampDown:20, valveE:15,valveF:0.040}
+    {a:0.0080,b:2.0,c:25, pmin:10,pmax:85, ppz:[[35,45]], rampUp:30,rampDown:30, valveE:20,valveF:0.045,minUpTime:2,minDownTime:2,startupCost:1200},
+    {a:0.0096,b:1.6,c:60, pmin:10,pmax:80, ppz:[], rampUp:25,rampDown:25, valveE:18,valveF:0.042,minUpTime:2,minDownTime:2,startupCost:1100},
+    {a:0.0110,b:1.2,c:100,pmin:10,pmax:70, ppz:[[30,40]], rampUp:20,rampDown:20, valveE:15,valveF:0.040,minUpTime:2,minDownTime:2,startupCost:1000}
   ];
   document.getElementById('in-demand').value=150;
   rebuildBMatrix(); renderGeneratorTable(); renderConstraintTables();
@@ -484,12 +512,12 @@ function loadSample3(){
 */
 function loadIEEE6(){
   generators=[
-    {a:0.0070,b:7.0,c:240, pmin:100,pmax:500, ppz:[[210,240],[350,380]], rampUp:80,rampDown:120, valveE:300,valveF:0.031},
-    {a:0.0095,b:10.0,c:200, pmin:50, pmax:200, ppz:[[90,110],[140,160]], rampUp:50,rampDown:90, valveE:200,valveF:0.042},
-    {a:0.0090,b:8.5,c:220, pmin:80, pmax:300, ppz:[[150,170],[210,240]], rampUp:65,rampDown:100, valveE:150,valveF:0.063},
-    {a:0.0090,b:11.0,c:200, pmin:50, pmax:150, ppz:[[80,90],[110,120]],   rampUp:50,rampDown:90, valveE:150,valveF:0.063},
-    {a:0.0080,b:10.5,c:220, pmin:50, pmax:200, ppz:[[90,110],[140,150]], rampUp:50,rampDown:90, valveE:150,valveF:0.063},
-    {a:0.0075,b:12.0,c:190, pmin:50, pmax:120, ppz:[[75,85],[100,105]],   rampUp:50,rampDown:90, valveE:150,valveF:0.063}
+    {a:0.0070,b:7.0,c:240, pmin:100,pmax:500, ppz:[[210,240],[350,380]], rampUp:80,rampDown:120, valveE:300,valveF:0.031,minUpTime:3,minDownTime:3,startupCost:1500},
+    {a:0.0095,b:10.0,c:200, pmin:50, pmax:200, ppz:[[90,110],[140,160]], rampUp:50,rampDown:90, valveE:200,valveF:0.042,minUpTime:2,minDownTime:2,startupCost:1200},
+    {a:0.0090,b:8.5,c:220, pmin:80, pmax:300, ppz:[[150,170],[210,240]], rampUp:65,rampDown:100, valveE:150,valveF:0.063,minUpTime:3,minDownTime:2,startupCost:1300},
+    {a:0.0090,b:11.0,c:200, pmin:50, pmax:150, ppz:[[80,90],[110,120]],   rampUp:50,rampDown:90, valveE:150,valveF:0.063,minUpTime:2,minDownTime:2,startupCost:1100},
+    {a:0.0080,b:10.5,c:220, pmin:50, pmax:200, ppz:[[90,110],[140,150]], rampUp:50,rampDown:90, valveE:150,valveF:0.063,minUpTime:2,minDownTime:2,startupCost:1200},
+    {a:0.0075,b:12.0,c:190, pmin:50, pmax:120, ppz:[[75,85],[100,105]],   rampUp:50,rampDown:90, valveE:150,valveF:0.063,minUpTime:2,minDownTime:2,startupCost:1000}
   ];
   Bmatrix=[
     [0.0017, 0.0012, 0.0007, -0.0001, -0.0005, -0.0002],
@@ -577,6 +605,19 @@ function renderConstraintTables(){
         <td><input type="number" step="any" value="${g.rampDown}" onchange="generators[${i}].rampDown=parseFloat(this.value)||0"></td></tr>`;
     });
     rbox.innerHTML=h+'</tbody>';
+  }
+
+  const cbox=document.getElementById('commitment-table');
+  if(generators.length===0){ cbox.innerHTML=''; }
+  else{
+    let h=`<table><thead><tr><th>Gen</th><th>minUpTime (h)</th><th>minDownTime (h)</th><th>Startup cost (₹)</th></tr></thead><tbody>`;
+    generators.forEach((g,i)=>{
+      h+=`<tr><td class="gen-tag">G${i+1}</td>
+        <td><input type="number" step="1" min="0" value="${g.minUpTime||2}" onchange="generators[${i}].minUpTime=parseInt(this.value)||2"></td>
+        <td><input type="number" step="1" min="0" value="${g.minDownTime||2}" onchange="generators[${i}].minDownTime=parseInt(this.value)||2"></td>
+        <td><input type="number" step="any" min="0" value="${g.startupCost||1000}" onchange="generators[${i}].startupCost=parseFloat(this.value)||1000"></td></tr>`;
+    });
+    cbox.innerHTML=h+'</tbody>';
   }
 }
 function setPPZ(i,str){
@@ -798,6 +839,213 @@ function onRunMultiPeriod(){
 
   Plotly.newPlot('plot-mp-cost', [{x:periods,y:schedule.map(s=>s.cost),type:'bar',marker:{color:'#C1652B'}}],
     baseLayout('Period','Cost (₹/h)'), {displayModeBar:false,responsive:true});
+}
+
+function averageFullLoadCost(g){
+  return (g.a*g.pmax*g.pmax + g.b*g.pmax + g.c) / g.pmax;
+}
+
+function transmissionLossSubset(powers, indices){
+  if(!lossesEnabled || Bmatrix.length===0) return 0;
+  let lossPu=0;
+  for(let pi=0; pi<powers.length; pi++){
+    const i = indices[pi];
+    const pPu = powers[pi] / 100;
+    for(let pj=0; pj<powers.length; pj++){
+      const j = indices[pj];
+      lossPu += pPu * (Bmatrix[i]?.[j] ?? 0) * (powers[pj] / 100);
+    }
+    lossPu += pPu * (B0i[i] ?? 0);
+  }
+  lossPu += B00 || 0;
+  return lossPu * 100;
+}
+
+function solveLambdaSubset(gens, demand, indices){
+  if(gens.length===0) return {ok:false};
+  const n=gens.length;
+  const pmin=gens.map(g=>g.pmin), pmax=gens.map(g=>g.pmax);
+  const invA=gens.map(g=>1/(2*g.a));
+  const sumInvA=invA.reduce((s,x)=>s+x,0);
+  const sumBOverA=gens.reduce((s,g,i)=>s+g.b*invA[i],0);
+  let lambda=(demand+sumBOverA)/sumInvA;
+  let power=new Array(n).fill(0);
+  let iterations=0; const MAX=3000; const TOL=0.01;
+  const DAMPING=0.5;
+  const trace=[{iter:0,lambda}];
+  let loss=0, dP=demand;
+  let bestPower=null, bestDP=Infinity, bestLambda=lambda, bestLoss=0;
+
+  while(Math.abs(dP)>TOL && iterations<MAX){
+    power = gens.map((g,i)=>{
+      let p=(lambda-g.b)/(2*g.a);
+      p=Math.min(p,pmax[i]); p=Math.max(p,pmin[i]);
+      p=snapOutOfPPZ(g,p);
+      return p;
+    });
+    loss = transmissionLossSubset(power, indices);
+    const sumP=power.reduce((s,x)=>s+x,0);
+    dP = (demand+loss) - sumP;
+    if(Math.abs(dP) < Math.abs(bestDP)){
+      bestDP = dP; bestPower = power.slice(); bestLambda = lambda; bestLoss = loss;
+    }
+    lambda += DAMPING * (2*dP)/sumInvA;
+    iterations++;
+    trace.push({iter:iterations,lambda});
+  }
+
+  const converged = Math.abs(dP) <= TOL;
+  const finalPower = converged ? power : bestPower;
+  const finalLambda = converged ? lambda : bestLambda;
+  const finalLoss = converged ? loss : bestLoss;
+  if(!finalPower) return {ok:false};
+  const cost = finalPower.map((p,i)=>unitCost(gens[i],p));
+  return {ok:true, lambda:finalLambda, power:finalPower, cost, loss:finalLoss,
+    iterations, trace, totalCost:cost.reduce((a,b)=>a+b,0), approximate: !converged};
+}
+
+function renderUCScheduleTable(status, demands){
+  const rows = generators.map((g,i)=>{
+    const cols = demands.map((_,h)=>`<td>${status[h][i] ? 'ON' : 'OFF'}</td>`).join('');
+    return `<tr><td class="gen-tag">G${i+1}</td>${cols}</tr>`;
+  });
+  let html = `<table><thead><tr><th>Gen</th>${demands.map((_,h)=>`<th>H${h+1}</th>`).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table>`;
+  return html;
+}
+
+function renderUCCostComparison(ucCost, allOnCost){
+  return `<thead><tr><th>Scenario</th><th>Total daily cost (₹)</th><th>Difference</th></tr></thead><tbody>
+    <tr><td>Unit Commitment</td><td>${ucCost.toFixed(0)}</td><td>${(ucCost-allOnCost).toFixed(0)}</td></tr>
+    <tr><td>All units always ON</td><td>${allOnCost.toFixed(0)}</td><td>—</td></tr>
+  </tbody>`;
+}
+
+function runAllOnMultiPeriod(demands){
+  let prevPower = generators.map(g=>g.pmin);
+  const schedule=[];
+  demands.forEach(d=>{
+    const tempGens = generators.map((g,i)=>({
+      ...g,
+      pmin: Math.max(g.pmin, prevPower[i]-g.rampDown),
+      pmax: Math.min(g.pmax, prevPower[i]+g.rampUp)
+    }));
+    const r = solveLambda(tempGens, d);
+    if(r.ok){ schedule.push({power:r.power,cost:r.totalCost}); prevPower=r.power; }
+    else{ schedule.push({power:prevPower.slice(),cost:null}); }
+  });
+  return schedule;
+}
+
+function onRunUnitCommitment(){
+  if(generators.length===0){ alert('Add generators first.'); return; }
+  const demands = document.getElementById('uc-loadcurve').value.split(',').map(s=>parseFloat(s.trim())).filter(x=>!isNaN(x));
+  if(demands.length===0){ alert('Enter a valid commitment load curve.'); return; }
+  lossesEnabled = document.getElementById('toggle-losses').checked;
+  valveEnabled = document.getElementById('toggle-valve').checked;
+  const reserveMargin = parseFloat(document.getElementById('uc-reserve-margin').value) || 10;
+
+  const priority = generators.map((g,i)=>(
+    {i, avg: averageFullLoadCost(g)}
+  )).sort((a,b)=>a.avg-b.avg);
+
+  const numHours = demands.length;
+  const status = Array.from({length:numHours},()=>new Array(generators.length).fill(false));
+  const dispatch = Array.from({length:numHours},()=>new Array(generators.length).fill(0));
+  const hourlyCost = new Array(numHours).fill(0);
+  const totalStartupCost = new Array(numHours).fill(0);
+
+  let prevStatus = generators.map(()=>false);
+  let onTime = generators.map(()=>0);
+  let offTime = generators.map(()=>1000);
+  let prevPower = generators.map(g=>g.pmin);
+
+  for(let h=0; h<numHours; h++){
+    const demand = demands[h];
+    const target = demand * (1 + reserveMargin / 100);
+    const forcedOn = new Set();
+    const forcedOff = new Set();
+
+    generators.forEach((g,i)=>{
+      if(prevStatus[i] && onTime[i] > 0 && onTime[i] < g.minUpTime){ forcedOn.add(i); }
+      if(!prevStatus[i] && offTime[i] > 0 && offTime[i] < g.minDownTime){ forcedOff.add(i); }
+    });
+
+    let committed = new Set(forcedOn);
+    let committedPmax = [...committed].reduce((s,i)=>s+generators[i].pmax,0);
+    let committedPmin = [...committed].reduce((s,i)=>s+generators[i].pmin,0);
+
+    for(const cand of priority){
+      if(committed.has(cand.i) || forcedOff.has(cand.i)) continue;
+      if(committedPmax >= target && committedPmin <= demand) break;
+      const g = generators[cand.i];
+      const nextPmin = committedPmin + g.pmin;
+      if(committedPmax >= target && nextPmin > demand) break;
+      committed.add(cand.i);
+      committedPmax += g.pmax;
+      committedPmin += g.pmin;
+    }
+
+    const indices=[];
+    const tempGens = [];
+    committed.forEach(i=>{
+      const g=generators[i];
+      const stayingOn = prevStatus[i] && !forcedOff.has(i);
+      let pminEff = g.pmin;
+      let pmaxEff = g.pmax;
+      if(stayingOn){
+        pminEff = Math.max(g.pmin, prevPower[i] - g.rampDown);
+        pmaxEff = Math.min(g.pmax, prevPower[i] + g.rampUp);
+      }
+      if(pmaxEff < pminEff){ pmaxEff = pminEff; }
+      tempGens.push({...g,pmin:pminEff,pmax:pmaxEff});
+      indices.push(i);
+    });
+
+    const result = solveLambdaSubset(tempGens, demand, indices);
+    if(!result.ok){ alert(`Unit commitment dispatch failed at hour ${h+1}. Check ramp/min-up/min-down feasibility.`); return; }
+
+    indices.forEach((i,j)=>{ status[h][i] = true; dispatch[h][i] = result.power[j]; });
+
+    let startup = 0;
+    indices.forEach(i=>{
+      if(!prevStatus[i]) startup += generators[i].startupCost || 0;
+    });
+    totalStartupCost[h] = startup;
+    hourlyCost[h] = result.totalCost + startup;
+
+    generators.forEach((g,i)=>{
+      const isOn = status[h][i];
+      if(isOn){ onTime[i] = prevStatus[i] ? onTime[i]+1 : 1; offTime[i]=0; }
+      else { offTime[i] = prevStatus[i] ? 1 : offTime[i]+1; onTime[i]=0; }
+    });
+    prevStatus = status[h].slice();
+    prevPower = generators.map((g,i)=> status[h][i] ? dispatch[h][i] : g.pmin );
+  }
+
+  const allOnSchedule = runAllOnMultiPeriod(demands);
+  const allOnCost = allOnSchedule.reduce((s,h)=>s + (h.cost || 0),0);
+  const ucTotal = hourlyCost.reduce((s,c)=>s+c,0);
+
+  document.getElementById('uc-empty').classList.add('hidden');
+  document.getElementById('uc-result').classList.remove('hidden');
+  document.getElementById('uc-schedule-table').innerHTML = renderUCScheduleTable(status, demands);
+  document.getElementById('uc-compare-table').innerHTML = renderUCCostComparison(ucTotal, allOnCost);
+
+  const chartHours = demands.map((_,i)=>i+1);
+  const colors=['#0E8C82','#C1652B','#1E3A5F','#8AA6C2','#B08968','#6FBF73'];
+  const stackTraces = generators.map((g,i)=>({
+    x:chartHours,
+    y:dispatch.map(row=>row[i]),
+    stackgroup:'one',
+    name:`G${i+1}`,
+    mode:'lines',
+    line:{width:0.5,color:colors[i%colors.length]},
+    fillcolor:colors[i%colors.length]
+  }));
+  stackTraces.push({x:hours,y:demands,mode:'lines',name:'Demand',line:{color:'#16202A',width:2,dash:'dot'}});
+  Plotly.newPlot('plot-uc-stack', stackTraces, baseLayout('Hour','MW'), {displayModeBar:false,responsive:true});
+
+  Plotly.newPlot('plot-uc-cost', [{x:hours,y:hourlyCost,type:'bar',marker:{color:'#C1652B'}}], baseLayout('Hour','Cost (₹/h)'), {displayModeBar:false,responsive:true});
 }
 
 /* =========================================================================
