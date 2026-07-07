@@ -76,6 +76,7 @@ td{padding:7px;border-bottom:1px solid var(--line);}
 .toggle-row input{width:auto;}
 .uc-manual-cell{cursor:pointer;text-align:center;transition:background .2s,color .2s;padding:6px;border:1px solid var(--line);border-radius:4px;}
 .uc-manual-cell.active{background:var(--copper-soft);color:var(--copper);font-weight:700;}
+.preset-button.active{background:var(--navy);color:#fff;}
 .infeasible-hour{background:rgba(193,34,34,0.12);color:var(--danger);}
 .pill{display:inline-block;padding:2px 8px;border-radius:20px;font-size:9.5px;font-family:var(--font-mono);}
 .pill-ok{background:#E5F6ED;color:#1E8E5A;} .pill-warn{background:#FDEEEA;color:var(--danger);}
@@ -212,10 +213,10 @@ footer{margin-top:30px;text-align:center;color:var(--muted);font-family:var(--fo
     <h2>24-Period Load Curve</h2>
     <p class="note">Comma-separated demand values (MW), one per period. Ramp limits from the Constraints tab are enforced between consecutive periods.</p>
     <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
-      <button class="btn-icon" onclick="applyLoadCurvePreset('typical','mp')">Typical Day</button>
-      <button class="btn-icon" onclick="applyLoadCurvePreset('light','mp')">Light Load Day</button>
-      <button class="btn-icon" onclick="applyLoadCurvePreset('peak','mp')">Peak Stress Day</button>
-      <button class="btn-icon" onclick="applyLoadCurvePreset('double','mp')">Double Peak</button>
+      <button type="button" class="btn-icon preset-button" data-preset-target="mp" data-preset="typical" onclick="applyLoadCurvePreset('typical','mp')">Typical Day</button>
+      <button type="button" class="btn-icon preset-button" data-preset-target="mp" data-preset="light" onclick="applyLoadCurvePreset('light','mp')">Light Load Day</button>
+      <button type="button" class="btn-icon preset-button" data-preset-target="mp" data-preset="peak" onclick="applyLoadCurvePreset('peak','mp')">Peak Stress Day</button>
+      <button type="button" class="btn-icon preset-button" data-preset-target="mp" data-preset="double" onclick="applyLoadCurvePreset('double','mp')">Double Peak</button>
     </div>
     <input type="text" id="in-loadcurve" value="420,410,405,400,410,440,520,610,680,720,740,750,745,730,710,690,670,700,730,690,620,540,470,430">
     <div class="note" style="margin:6px 0 0;">For a demonstrative commitment schedule showing units turning ON/OFF, ensure demand varies enough that no single unit's Pmax covers the full range — try a peak near 900-1000 MW and a low near 200-300 MW.</div>
@@ -236,20 +237,20 @@ footer{margin-top:30px;text-align:center;color:var(--muted);font-family:var(--fo
     <h2>Unit Commitment Overview</h2>
     <p class="note">Commit units by priority order, then dispatch only the online units each hour using the existing λ-iteration solver.</p>
     <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
-      <button class="btn-icon" onclick="applyLoadCurvePreset('typical','uc')">Typical Day</button>
-      <button class="btn-icon" onclick="applyLoadCurvePreset('light','uc')">Light Load Day</button>
-      <button class="btn-icon" onclick="applyLoadCurvePreset('peak','uc')">Peak Stress Day</button>
-      <button class="btn-icon" onclick="applyLoadCurvePreset('double','uc')">Double Peak</button>
+      <button type="button" class="btn-icon preset-button" data-preset-target="uc" data-preset="typical" onclick="applyLoadCurvePreset('typical','uc')">Typical Day</button>
+      <button type="button" class="btn-icon preset-button" data-preset-target="uc" data-preset="light" onclick="applyLoadCurvePreset('light','uc')">Light Load Day</button>
+      <button type="button" class="btn-icon preset-button" data-preset-target="uc" data-preset="peak" onclick="applyLoadCurvePreset('peak','uc')">Peak Stress Day</button>
+      <button type="button" class="btn-icon preset-button" data-preset-target="uc" data-preset="double" onclick="applyLoadCurvePreset('double','uc')">Double Peak</button>
     </div>
     <div class="grid2">
       <div><label>Spinning reserve margin (%)</label><input type="number" id="uc-reserve-margin" value="10" step="any"></div>
       <div><label>Commitment load curve</label><input type="text" id="uc-loadcurve" value="210,205,200,198,205,220,260,310,360,400,420,430,425,415,395,375,355,380,405,385,340,300,260,230"></div>
     </div>
     <div class="note" style="margin:6px 0 0;">For a demonstrative commitment schedule showing units turning ON/OFF, ensure demand varies enough that no single unit's Pmax covers the full range — try a peak near 900-1000 MW and a low near 200-300 MW.</div>
-    <div class="toggle-row"><input type="checkbox" id="uc-manual-mode" onchange="toggleUCManualMode()"><span>Manual commitment mode</span></div>
+    <label class="toggle-row"><input type="checkbox" id="uc-manual-mode" onchange="toggleUCManualMode()"><span>Manual commitment mode</span></label>
     <div id="uc-manual-instructions" class="note hidden" style="margin:0;padding:0;">Click cells below to toggle ON/OFF. Run the dispatch to apply the selected manual schedule. Infeasible hours will be flagged.</div>
     <div id="uc-manual-grid" class="panel hidden" style="margin-top:10px;padding:10px;"></div>
-    <div class="toggle-row"><input type="checkbox" id="uc-force-two"><span>Force minimum 2 units online</span></div>
+    <label class="toggle-row"><input type="checkbox" id="uc-force-two"><span>Force minimum 2 units online</span></label>
     <div style="margin-top:10px;"><button class="btn-primary" onclick="onRunUnitCommitment()">Run unit commitment dispatch →</button></div>
   </div>
   <div id="uc-empty" class="empty-note" style="padding:36px;">Run the unit commitment dispatch to see the schedule.</div>
@@ -335,6 +336,8 @@ let lastLambdaResult = null;
 let lastMetaResults = null; // {GA:{...}, PSO:{...}, GWO:{...}, DE:{...}, 'Vortex Search':{...}}
 let currentUCSchedule = null; // { status, dispatch, demands, hourlyCost, allOnCost, ucTotal, mpUcCost, hourlyDetail, manualMode }
 let ucManualSchedule = null;
+let selectedUCPreset = null;
+let selectedMPPreset = null;
 
 /* =========================================================================
    TAB SWITCHING
@@ -1245,6 +1248,18 @@ function applyLoadCurvePreset(preset, target){
     initUCManualSchedule(demands.length);
     renderUCManualGrid(demands.length);
   }
+  if(target==='uc'){
+    selectedUCPreset = preset;
+  } else {
+    selectedMPPreset = preset;
+  }
+  markPresetHighlight(target, preset);
+}
+
+function markPresetHighlight(target, preset){
+  document.querySelectorAll(`.preset-button[data-preset-target="${target}"]`).forEach(btn=>{
+    btn.classList.toggle('active', btn.dataset.preset===preset);
+  });
 }
 
 function toggleUCManualMode(){
