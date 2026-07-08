@@ -525,25 +525,25 @@ async function exportReport(){
       }
     }
     /* ---------- Cover page ---------- */
-    addTitle('Dispatch Pro — Economic Load Dispatch Analysis Report', 18, navy, 'center');
+    addTitle('Economic Load Dispatch Analysis Report', 18, navy, 'center');
     y += 16;
-    addLine('Classical vs Metaheuristic Optimization', 12, copper, 6);
+    addLine('Dispatch and optimization results for the current project model', 12, copper, 6);
     addLine(`Generated: ${new Date().toLocaleString()}`, 10, gray, 6);
-    addLine('Project report generated from the live dispatch dashboard.', 10, gray, 6);
+    addLine('Generated from the active system configuration and solver output.', 10, gray, 6);
     addDivider();
     y += 18;
-    addLine('This report summarizes the dispatch study using the current generator data, demand profile, and optimization settings.', 10, gray, 4);
-    addLine('The content below is intended to document the technical results in a clear and reproducible format.', 10, gray, 4);
+    addLine('This report documents the dispatch solution obtained from the current generator data, demand profile, and operating constraints.', 10, gray, 4);
+    addLine('The following sections present the technical results in a structured and reproducible format.', 10, gray, 4);
 
     doc.addPage(); y = 18;
 
     /* ---------- Executive summary ---------- */
     addTitle('Executive Summary', 14, navy);
     const summaryLines = [
-      `This report presents dispatch results for a demand of ${demand.toFixed(0)} MW. The lambda-iteration method achieved a cost of Rs.${lambdaCost.toFixed(2)}/h with ${lambdaLoss.toFixed(2)} MW transmission loss.`,
-      `The classical solution converged in ${lambdaIterations} iterations at Lambda = ${lambdaLambda.toFixed(3)} Rs./MWh, establishing a deterministic baseline for the study.`,
-      bestMetaCost != null ? `The best metaheuristic result reached Rs.${bestMetaCost.toFixed(2)}/h, improving the lambda solution by ${bestMetaImprovementPct != null ? bestMetaImprovementPct.toFixed(1) : '—'}%.` : 'Metaheuristic results were not available for this export run.',
-      'The improvement is attributed to the ability of the heuristics to escape local minima induced by valve-point non-convexity and constraint interaction.'
+      `The dispatch solution for a demand of ${demand.toFixed(0)} MW was obtained using the current generator set and operating constraints. The lambda-iteration method produced a dispatch cost of Rs.${lambdaCost.toFixed(2)}/h with ${lambdaLoss.toFixed(2)} MW transmission loss.`,
+      `The deterministic solution converged in ${lambdaIterations} iterations at Lambda = ${lambdaLambda.toFixed(3)} Rs./MWh.`,
+      bestMetaCost != null ? `The best metaheuristic result reached Rs.${bestMetaCost.toFixed(2)}/h, corresponding to ${bestMetaImprovementPct != null ? bestMetaImprovementPct.toFixed(1) : '—'}% lower cost than the deterministic solution.` : 'Metaheuristic results were not available for this export run.',
+      'The comparison reflects the influence of the cost model, constraint handling, and the selected optimization method on the final dispatch outcome.'
     ];
     summaryLines.forEach(line=>addLine(line, 10, [55,65,75], 4));
     addDivider();
@@ -612,9 +612,9 @@ async function exportReport(){
 
     /* ---------- Section 3: Metaheuristic comparison ---------- */
     doc.addPage(); y = 18;
-    addSectionHeader(3, 'Metaheuristic Algorithm Comparison');
+    addSectionHeader(3, 'Optimization Comparison');
     if(metaEntries.length){
-      addLine('The metaheuristic suite provides a comparative benchmark against the deterministic lambda solution under the current system conditions.', 9, gray, 4);
+      addLine('The results below compare the deterministic dispatch solution with the optimization results obtained from the available metaheuristic methods.', 9, gray, 4);
       addTable(
         ['Algorithm','Mean cost (Rs./h)','Best cost (Rs./h)','Mean time (ms)'],
         metaEntries.map(entry=>[entry.name, entry.meanCost.toFixed(2), entry.bestCost.toFixed(2), entry.meanTime.toFixed(2)]),
@@ -631,18 +631,18 @@ async function exportReport(){
 
     /* ---------- Section 4: Cross-method comparison ---------- */
     doc.addPage(); y = 18;
-    addSectionHeader(4, 'Cross-Method Comparison');
-    addLine('This section consolidates the classical and heuristic outcomes into a concise comparison of the reported results.', 9, gray, 4);
+    addSectionHeader(4, 'Dispatch Method Comparison');
+    addLine('This section consolidates the deterministic and heuristic results into a concise comparison of the reported dispatch outcomes.', 9, gray, 4);
     addTable(
       ['Method','Cost (Rs./h)','Observation'],
       [
-        ['Lambda-Iteration', lambdaCost.toFixed(2), 'Deterministic classical benchmark'],
-        [bestMetaName, bestMetaCost != null ? bestMetaCost.toFixed(2) : '—', bestMetaCost != null ? 'Best metaheuristic result' : 'Unavailable']
+        ['Lambda-Iteration', lambdaCost.toFixed(2), 'Deterministic dispatch result'],
+        [bestMetaName, bestMetaCost != null ? bestMetaCost.toFixed(2) : '—', bestMetaCost != null ? 'Lowest-cost optimization result' : 'Unavailable']
       ],
       [1,2]
     );
     await captureChartsForTab('compare', [
-      {id:'plot-cmp-box', caption:'Figure 7: Cost distribution for deterministic vs stochastic methods'},
+      {id:'plot-cmp-box', caption:'Figure 7: Cost distribution for deterministic and heuristic methods'},
       {id:'plot-cmp-radar', caption:'Figure 8: Normalized trade-off between cost, speed, and robustness'},
       {id:'plot-cmp-sweep', caption:'Figure 9: Cost sensitivity to demand variation'}
     ]);
@@ -651,10 +651,10 @@ async function exportReport(){
     doc.addPage(); y = 18;
     addSectionHeader(5, 'Conclusion');
     const conclusionLines = [
-      `The best-performing approach in this study was ${bestMetaName !== '—' ? bestMetaName : 'the available metaheuristic method'}, which delivered the lowest reported cost of Rs.${bestMetaCost != null ? bestMetaCost.toFixed(2) : '—'}/h.`,
-      bestMetaCost != null && lambdaCost > 0 ? `This represents a ${((lambdaCost - bestMetaCost)/lambdaCost*100).toFixed(1)}% improvement over the classical lambda-iteration result.` : 'The classical and heuristic outcomes were comparable for this export run.',
-      'The analysis demonstrates that the dashboard can support deterministic dispatch and metaheuristic benchmarking within the same system model.',
-      'The report therefore provides a technical summary of the system performance, cost behavior, and optimization comparison for the current project setup.'
+      `The lowest-cost result in this study was obtained from ${bestMetaName !== '—' ? bestMetaName : 'the available metaheuristic method'}, with a reported cost of Rs.${bestMetaCost != null ? bestMetaCost.toFixed(2) : '—'}/h.`,
+      bestMetaCost != null && lambdaCost > 0 ? `This corresponds to a ${((lambdaCost - bestMetaCost)/lambdaCost*100).toFixed(1)}% reduction relative to the deterministic lambda-iteration result.` : 'The deterministic and heuristic results were comparable for this export run.',
+      'The analysis shows how the selected cost model and constraint handling affect the final dispatch schedule and operating cost.',
+      'The report therefore provides a technical summary of the system performance, cost behavior, and optimization comparison for the current project configuration.'
     ];
     conclusionLines.forEach(line=>addLine(line, 10, [55,65,75], 4));
 
