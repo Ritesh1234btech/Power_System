@@ -1366,14 +1366,14 @@ function toggleUCQuickGenerator(index){
 }
 
 function syncUCQuickSelectionToManualGrid(){
+  const demands = document.getElementById('uc-loadcurve').value.split(',').map(s=>parseFloat(s.trim())).filter(x=>!isNaN(x));
+  if(demands.length===0) return;
+  initUCManualSchedule(demands.length);
+  ucManualSchedule = Array.from({length:demands.length},()=>Array(generators.length).fill(false));
+  ucForcedGenIndices.forEach(i=>{
+    ucManualSchedule.forEach(row=>{ row[i] = true; });
+  });
   if(document.getElementById('uc-manual-mode')?.checked){
-    const demands = document.getElementById('uc-loadcurve').value.split(',').map(s=>parseFloat(s.trim())).filter(x=>!isNaN(x));
-    initUCManualSchedule(demands.length);
-    ucManualSchedule = ucManualSchedule.map(row=>{
-      const nextRow = row.slice();
-      ucForcedGenIndices.forEach(i=>{ nextRow[i] = true; });
-      return nextRow;
-    });
     renderUCManualGrid(demands.length);
   }
 }
