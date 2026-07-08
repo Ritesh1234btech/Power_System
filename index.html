@@ -663,7 +663,7 @@ function renderConstraintTables(){
         <td><input type="number" step="1" min="0" value="${g.minDownTime||2}" onchange="generators[${i}].minDownTime=parseInt(this.value)||2"></td>
         <td><input type="number" step="any" min="0" value="${g.startupCost||1000}" onchange="generators[${i}].startupCost=parseFloat(this.value)||1000"></td></tr>`;
     });
-    cbox.innerHTML=h+'</tbody>';
+    cbox.innerHTML=h+'</tbody></table>';
   }
 }
 function setPPZ(i,str){
@@ -1019,8 +1019,9 @@ function runMultiPeriodWithUCSchedule(demands){
     const tempGens=[];
     indices.forEach(i=>{
       const g = generators[i];
-      const stayingOn = h>0 && currentUCSchedule.status[h-1][i];
-      if(!stayingOn && !prevStatus[i]) startup += g.startupCost || 0;
+      const wasOn = h > 0 && currentUCSchedule.status[h-1][i];
+      if(!wasOn) startup += g.startupCost || 0;
+      const stayingOn = wasOn;
       let pminEff = g.pmin;
       let pmaxEff = g.pmax;
       if(stayingOn){
@@ -1049,188 +1050,213 @@ function runMultiPeriodWithUCSchedule(demands){
 }
 
 function onRunUnitCommitment(){
-  currentUCSchedule = null;
-  if(generators.length===0){ alert('Add generators first.'); return; }
-  const demands = document.getElementById('uc-loadcurve').value.split(',').map(s=>parseFloat(s.trim())).filter(x=>!isNaN(x));
-  if(demands.length===0){ alert('Enter a valid commitment load curve.'); return; }
-  lossesEnabled = document.getElementById('toggle-losses').checked;
-  valveEnabled = document.getElementById('toggle-valve').checked;
-  const reserveMargin = parseFloat(document.getElementById('uc-reserve-margin').value) || 10;
-  const forceMinTwo = document.getElementById('uc-force-two')?.checked;
-  const manualMode = document.getElementById('uc-manual-mode')?.checked;
+  try {
+    console.log('🔵 UC Dispatch Started');
+    currentUCSchedule = null;
+    if(generators.length===0){ alert('Add generators first.'); return; }
+    console.log(`✓ Generators loaded: ${generators.length}`);
+    
+    const demands = document.getElementById('uc-loadcurve').value.split(',').map(s=>parseFloat(s.trim())).filter(x=>!isNaN(x));
+    if(demands.length===0){ alert('Enter a valid commitment load curve.'); return; }
+    console.log(`✓ Demands loaded: ${demands.length} hours, total: ${demands.reduce((a,b)=>a+b,0).toFixed(0)} MW`);
+    
+    lossesEnabled = document.getElementById('toggle-losses').checked;
+    valveEnabled = document.getElementById('toggle-valve').checked;
+    const reserveMargin = parseFloat(document.getElementById('uc-reserve-margin').value) || 10;
+    const forceMinTwo = document.getElementById('uc-force-two')?.checked || false;
+    const manualMode = document.getElementById('uc-manual-mode')?.checked || false;
+    console.log(`✓ Settings: losses=${lossesEnabled}, valve=${valveEnabled}, reserve=${reserveMargin}%, forceMin2=${forceMinTwo}, manual=${manualMode}`);
 
-  if(manualMode){
-    if(!ucManualSchedule || ucManualSchedule.length !== demands.length){
-      ucManualSchedule = Array.from({length:demands.length},()=>new Array(generators.length).fill(false));
-    }
-    renderUCManualGrid(demands.length);
-  }
-
-  const priority = generators.map((g,i)=>(
-    {i, avg: averageFullLoadCost(g)}
-  )).sort((a,b)=>a.avg-b.avg);
-
-  const numHours = demands.length;
-  const status = Array.from({length:numHours},()=>new Array(generators.length).fill(false));
-  const dispatch = Array.from({length:numHours},()=>new Array(generators.length).fill(0));
-  const hourlyCost = new Array(numHours).fill(0);
-  const hourlyDetail = [];
-  const totalStartupCost = new Array(numHours).fill(0);
-
-  let prevStatus = generators.map(()=>false);
-  let onTime = generators.map(()=>0);
-  let offTime = generators.map(()=>1000);
-  let prevPower = generators.map(g=>g.pmin);
-
-  for(let h=0; h<numHours; h++){
-    const demand = demands[h];
-    const target = demand * (1 + reserveMargin / 100);
-    const forcedOn = new Set();
-    const forcedOff = new Set();
-
-    generators.forEach((g,i)=>{
-      if(prevStatus[i] && onTime[i] > 0 && onTime[i] < g.minUpTime){ forcedOn.add(i); }
-      if(!prevStatus[i] && offTime[i] > 0 && offTime[i] < g.minDownTime){ forcedOff.add(i); }
-    });
-
-    let committed = new Set();
-    let committedPmax=0;
-    let committedPmin=0;
     if(manualMode){
-      ucManualSchedule[h].forEach((on,i)=>{
-        if(on){
-          committed.add(i);
-          committedPmax += generators[i].pmax;
-          committedPmin += generators[i].pmin;
-        }
+      if(!ucManualSchedule || ucManualSchedule.length !== demands.length){
+        ucManualSchedule = Array.from({length:demands.length},()=>new Array(generators.length).fill(false));
+      }
+      renderUCManualGrid(demands.length);
+    }
+
+    const priority = generators.map((g,i)=>(
+      {i, avg: averageFullLoadCost(g)}
+    )).sort((a,b)=>a.avg-b.avg);
+
+    const numHours = demands.length;
+    const status = Array.from({length:numHours},()=>new Array(generators.length).fill(false));
+    const dispatch = Array.from({length:numHours},()=>new Array(generators.length).fill(0));
+    const hourlyCost = new Array(numHours).fill(0);
+    const hourlyDetail = [];
+    const totalStartupCost = new Array(numHours).fill(0);
+
+    let prevStatus = generators.map(()=>false);
+    let onTime = generators.map(()=>0);
+    let offTime = generators.map(()=>1000);
+    let prevPower = generators.map(g=>g.pmin);
+
+    for(let h=0; h<numHours; h++){
+      const demand = demands[h];
+      const target = demand * (1 + reserveMargin / 100);
+      const forcedOn = new Set();
+      const forcedOff = new Set();
+
+      generators.forEach((g,i)=>{
+        if(prevStatus[i] && onTime[i] > 0 && onTime[i] < g.minUpTime){ forcedOn.add(i); }
+        if(!prevStatus[i] && offTime[i] > 0 && offTime[i] < g.minDownTime){ forcedOff.add(i); }
       });
-      if(forceMinTwo && committed.size < 2){
-        for(const cand of priority){
-          if(committed.has(cand.i)) continue;
-          committed.add(cand.i);
-          committedPmax += generators[cand.i].pmax;
-          committedPmin += generators[cand.i].pmin;
-          if(committed.size >= 2) break;
+
+      let committed = new Set();
+      let committedPmax=0;
+      let committedPmin=0;
+      if(manualMode){
+        ucManualSchedule[h].forEach((on,i)=>{
+          if(on){
+            committed.add(i);
+            committedPmax += generators[i].pmax;
+            committedPmin += generators[i].pmin;
+          }
+        });
+        if(forceMinTwo && committed.size < 2){
+          for(const cand of priority){
+            if(committed.has(cand.i)) continue;
+            committed.add(cand.i);
+            committedPmax += generators[cand.i].pmax;
+            committedPmin += generators[cand.i].pmin;
+            if(committed.size >= 2) break;
+          }
         }
-      }
-    } else {
-      committed = new Set(forcedOn);
-      committedPmax = [...committed].reduce((s,i)=>s+generators[i].pmax,0);
-      committedPmin = [...committed].reduce((s,i)=>s+generators[i].pmin,0);
-      for(const cand of priority){
-        if(committed.has(cand.i) || forcedOff.has(cand.i)) continue;
-        if(committedPmax >= target && committedPmin <= demand) break;
-        const g = generators[cand.i];
-        const nextPmin = committedPmin + g.pmin;
-        if(committedPmax >= target && nextPmin > demand) break;
-        committed.add(cand.i);
-        committedPmax += g.pmax;
-        committedPmin += g.pmin;
-      }
-      if(forceMinTwo && committed.size < 2){
+      } else {
+        committed = new Set(forcedOn);
+        committedPmax = [...committed].reduce((s,i)=>s+generators[i].pmax,0);
+        committedPmin = [...committed].reduce((s,i)=>s+generators[i].pmin,0);
         for(const cand of priority){
           if(committed.has(cand.i) || forcedOff.has(cand.i)) continue;
+          if(committedPmax >= target && committedPmin <= demand) break;
+          const g = generators[cand.i];
+          const nextPmin = committedPmin + g.pmin;
+          if(committedPmax >= target && nextPmin > demand) break;
           committed.add(cand.i);
-          committedPmax += generators[cand.i].pmax;
-          committedPmin += generators[cand.i].pmin;
-          if(committed.size >= 2) break;
+          committedPmax += g.pmax;
+          committedPmin += g.pmin;
+        }
+        if(forceMinTwo && committed.size < 2){
+          for(const cand of priority){
+            if(committed.has(cand.i) || forcedOff.has(cand.i)) continue;
+            committed.add(cand.i);
+            committedPmax += generators[cand.i].pmax;
+            committedPmin += generators[cand.i].pmin;
+            if(committed.size >= 2) break;
+          }
         }
       }
+
+      const indices=[];
+      const tempGens = [];
+      const hourDetail = {hour:h+1,demand,committed:[],unitDetails:[],startupCost:0,fuelCost:0,totalCost:0,infeasible:false};
+      committed.forEach(i=>{
+        const g=generators[i];
+        const stayingOn = manualMode ? (h>0 && ucManualSchedule[h-1][i]) : (prevStatus[i] && !forcedOff.has(i));
+        let pminEff = g.pmin;
+        let pmaxEff = g.pmax;
+        if(stayingOn){
+          pminEff = Math.max(g.pmin, prevPower[i] - g.rampDown);
+          pmaxEff = Math.min(g.pmax, prevPower[i] + g.rampUp);
+        }
+        if(pmaxEff < pminEff){ pmaxEff = pminEff; }
+        tempGens.push({...g,pmin:pminEff,pmax:pmaxEff});
+        indices.push(i);
+        hourDetail.committed.push(`G${i+1}`);
+      });
+
+      const result = solveLambdaSubset(tempGens, demand, indices);
+      if(!result.ok){ alert(`Unit commitment dispatch failed at hour ${h+1}. Check ramp/min-up/min-down feasibility.`); return; }
+
+      let startup = 0;
+      indices.forEach(i=>{
+        const wasOn = h > 0 ? (manualMode ? ucManualSchedule[h-1][i] : prevStatus[i]) : false;
+        if(!wasOn) startup += generators[i].startupCost || 0;
+      });
+      totalStartupCost[h] = startup;
+
+      indices.forEach((i,j)=>{
+        status[h][i] = true;
+        dispatch[h][i] = result.power[j];
+        const g = generators[i];
+        const p = result.power[j];
+        const fuel = baseCost(g,p);
+        const ripple = valveCost(g,p);
+        hourDetail.unitDetails.push({gen:`G${i+1}`,p, fuelCost:fuel, valveCost:ripple, totalCost: unitCost(g,p)});
+      });
+
+      const infeasible = committed.reduce((sum,i)=> sum + generators[i].pmax,0) < demand;
+      hourDetail.startupCost = startup;
+      hourDetail.fuelCost = result.totalCost;
+      hourDetail.totalCost = result.totalCost + startup;
+      hourDetail.infeasible = infeasible;
+      hourlyDetail.push(hourDetail);
+      hourlyCost[h] = result.totalCost + startup;
+
+      generators.forEach((g,i)=>{
+        const isOn = status[h][i];
+        if(isOn){ onTime[i] = prevStatus[i] ? onTime[i]+1 : 1; offTime[i]=0; }
+        else { offTime[i] = prevStatus[i] ? 1 : offTime[i]+1; onTime[i]=0; }
+      });
+      prevStatus = status[h].slice();
+      prevPower = generators.map((g,i)=> status[h][i] ? dispatch[h][i] : g.pmin );
     }
 
-    const indices=[];
-    const tempGens = [];
-    const hourDetail = {hour:h+1,demand,committed:[],unitDetails:[],startupCost:0,fuelCost:0,totalCost:0,infeasible:false};
-    committed.forEach(i=>{
-      const g=generators[i];
-      const stayingOn = manualMode ? (h>0 && ucManualSchedule[h-1][i]) : (prevStatus[i] && !forcedOff.has(i));
-      let pminEff = g.pmin;
-      let pmaxEff = g.pmax;
-      if(stayingOn){
-        pminEff = Math.max(g.pmin, prevPower[i] - g.rampDown);
-        pmaxEff = Math.min(g.pmax, prevPower[i] + g.rampUp);
-      }
-      if(pmaxEff < pminEff){ pmaxEff = pminEff; }
-      tempGens.push({...g,pmin:pminEff,pmax:pmaxEff});
-      indices.push(i);
-      hourDetail.committed.push(`G${i+1}`);
-    });
+    const allOnSchedule = runAllOnMultiPeriod(demands);
+    const allOnCost = allOnSchedule.reduce((s,h)=>s + (h.cost || 0),0);
+    const ucTotal = hourlyCost.reduce((s,c)=>s+c,0);
 
-    const result = solveLambdaSubset(tempGens, demand, indices);
-    if(!result.ok){ alert(`Unit commitment dispatch failed at hour ${h+1}. Check ramp/min-up/min-down feasibility.`); return; }
+    const mpUcSchedule = runMultiPeriodWithUCSchedule(demands);
+    const mpUcCost = mpUcSchedule ? mpUcSchedule.reduce((s,h)=>s+(h.cost||0),0) : null;
 
-    let startup = 0;
-    indices.forEach(i=>{
-      const wasOn = h>0 ? (manualMode ? ucManualSchedule[h-1][i] : prevStatus[i]) : false;
-      if(!wasOn) startup += generators[i].startupCost || 0;
-    });
-    totalStartupCost[h] = startup;
+    if(ucTotal > allOnCost){
+      console.warn('UC total cost is higher than all-on baseline:', ucTotal, '>', allOnCost);
+    }
 
-    indices.forEach((i,j)=>{
-      status[h][i] = true;
-      dispatch[h][i] = result.power[j];
-      const g = generators[i];
-      const p = result.power[j];
-      const fuel = baseCost(g,p);
-      const ripple = valveCost(g,p);
-      hourDetail.unitDetails.push({gen:`G${i+1}`,p, fuelCost:fuel, valveCost:ripple, totalCost: unitCost(g,p)});
-    });
+    currentUCSchedule = {
+      status, dispatch, demands, hourlyCost, hourlyDetail, allOnCost, ucTotal, mpUcCost, manualMode
+    };
+    console.log(`✓ Schedule computed: UC total cost = ₹${ucTotal.toFixed(0)}, All-on = ₹${allOnCost.toFixed(0)}`);
+    
+    renderMPUCBadge();
 
-    const infeasible = committed.reduce((sum,i)=> sum + generators[i].pmax,0) < demand;
-    hourDetail.startupCost = startup;
-    hourDetail.fuelCost = result.totalCost;
-    hourDetail.totalCost = result.totalCost + startup;
-    hourDetail.infeasible = infeasible;
-    hourlyDetail.push(hourDetail);
-    hourlyCost[h] = result.totalCost + startup;
+    console.log('🔄 Hiding uc-empty...');
+    document.getElementById('uc-empty').classList.add('hidden');
+    console.log('🔄 Showing uc-result...');
+    document.getElementById('uc-result').classList.remove('hidden');
+    
+    console.log('🔄 Rendering schedule table...');
+    document.getElementById('uc-schedule-table').innerHTML = renderUCScheduleTable(status, demands, hourlyDetail);
+    console.log('🔄 Rendering cost comparison...');
+    document.getElementById('uc-compare-table').innerHTML = renderUCCostComparison(ucTotal, allOnCost, mpUcCost);
+    console.log('🔄 Rendering validation panel...');
+    renderUCValidationPanel();
+    console.log('🔄 Rendering hourly detail...');
+    renderUCHourlyDetail();
 
-    generators.forEach((g,i)=>{
-      const isOn = status[h][i];
-      if(isOn){ onTime[i] = prevStatus[i] ? onTime[i]+1 : 1; offTime[i]=0; }
-      else { offTime[i] = prevStatus[i] ? 1 : offTime[i]+1; onTime[i]=0; }
-    });
-    prevStatus = status[h].slice();
-    prevPower = generators.map((g,i)=> status[h][i] ? dispatch[h][i] : g.pmin );
+    console.log('🔄 Preparing Plotly charts...');
+    const chartHours = demands.map((_,h)=>h+1);
+    const colors=['#0E8C82','#C1652B','#1E3A5F','#8AA6C2','#B08968','#6FBF73'];
+    const stackTraces = generators.map((g,i)=>({
+      x:chartHours,
+      y:dispatch.map(row=>row[i]),
+      stackgroup:'one',
+      name:`G${i+1}`,
+      mode:'lines',
+      line:{width:0.5,color:colors[i%colors.length]},
+      fillcolor:colors[i%colors.length]
+    }));
+    stackTraces.push({x:chartHours,y:demands,mode:'lines',name:'Demand',line:{color:'#16202A',width:2,dash:'dot'}});
+    console.log('🔄 Drawing stacked area chart...');
+    Plotly.newPlot('plot-uc-stack', stackTraces, baseLayout('Hour','MW'), {displayModeBar:false,responsive:true});
+
+    console.log('🔄 Drawing cost bar chart...');
+    Plotly.newPlot('plot-uc-cost', [{x:chartHours,y:hourlyCost,type:'bar',marker:{color:'#C1652B'}}], baseLayout('Hour','Cost (₹/h)'), {displayModeBar:false,responsive:true});
+    console.log('✅ UC Dispatch Complete!');
+  } catch(err) {
+    console.error('❌ Unit Commitment Error:', err);
+    console.error('Stack:', err.stack);
+    alert('❌ UC Error: ' + err.message + '\n\nCheck browser console (F12) for details.');
   }
-
-  const allOnSchedule = runAllOnMultiPeriod(demands);
-  const allOnCost = allOnSchedule.reduce((s,h)=>s + (h.cost || 0),0);
-  const ucTotal = hourlyCost.reduce((s,c)=>s+c,0);
-
-  const mpUcSchedule = runMultiPeriodWithUCSchedule(demands);
-  const mpUcCost = mpUcSchedule ? mpUcSchedule.reduce((s,h)=>s+(h.cost||0),0) : null;
-
-  if(ucTotal > allOnCost){
-    console.warn('UC total cost is higher than all-on baseline:', ucTotal, '>', allOnCost);
-  }
-
-  currentUCSchedule = {
-    status, dispatch, demands, hourlyCost, hourlyDetail, allOnCost, ucTotal, mpUcCost, manualMode
-  };
-  renderMPUCBadge();
-
-  document.getElementById('uc-empty').classList.add('hidden');
-  document.getElementById('uc-result').classList.remove('hidden');
-  document.getElementById('uc-schedule-table').innerHTML = renderUCScheduleTable(status, demands, hourlyDetail);
-  document.getElementById('uc-compare-table').innerHTML = renderUCCostComparison(ucTotal, allOnCost, mpUcCost);
-  renderUCValidationPanel();
-  renderUCHourlyDetail();
-
-  const chartHours = demands.map((_,h)=>h+1);
-  const colors=['#0E8C82','#C1652B','#1E3A5F','#8AA6C2','#B08968','#6FBF73'];
-  const stackTraces = generators.map((g,i)=>({
-    x:chartHours,
-    y:dispatch.map(row=>row[i]),
-    stackgroup:'one',
-    name:`G${i+1}`,
-    mode:'lines',
-    line:{width:0.5,color:colors[i%colors.length]},
-    fillcolor:colors[i%colors.length]
-  }));
-  stackTraces.push({x:chartHours,y:demands,mode:'lines',name:'Demand',line:{color:'#16202A',width:2,dash:'dot'}});
-  Plotly.newPlot('plot-uc-stack', stackTraces, baseLayout('Hour','MW'), {displayModeBar:false,responsive:true});
-
-  Plotly.newPlot('plot-uc-cost', [{x:chartHours,y:hourlyCost,type:'bar',marker:{color:'#C1652B'}}], baseLayout('Hour','Cost (₹/h)'), {displayModeBar:false,responsive:true});
 }
 
 function applyLoadCurvePreset(preset, target){
@@ -1350,7 +1376,7 @@ function renderUCValidationPanel(){
     {label:'All hours feasible', pass:feasible, detail: feasible ? 'All committed hours meet demand' : 'Some hours cannot meet demand with committed units'}
   ];
   panel.classList.remove('hidden');
-  panel.innerHTML = `<div class="panel"><h2>Validation</h2><table><thead><tr><th>Check</th><th>Status</th><th>Detail</th></tr></thead><tbody>${statusRows.map(r=>`<tr><td>${r.label}</td><td>${r.pass?'<span class="pill pill-ok">PASS</span>':'<span class="pill pill-warn">FAIL</span>'}</td><td>${r.detail}</td></tr>`).join('')}</tbody></table></div>`;
+  panel.innerHTML = `<h2>Validation</h2><table><thead><tr><th>Check</th><th>Status</th><th>Detail</th></tr></thead><tbody>${statusRows.map(r=>`<tr><td>${r.label}</td><td>${r.pass?'<span class="pill pill-ok">PASS</span>':'<span class="pill pill-warn">FAIL</span>'}</td><td>${r.detail}</td></tr>`).join('')}</tbody></table>`;
 }
 
 /* =========================================================================
