@@ -257,7 +257,7 @@ footer{margin-top:30px;text-align:center;color:var(--muted);font-family:var(--fo
     <label class="toggle-row"><input type="checkbox" id="uc-manual-mode" onchange="toggleUCManualMode()"><span>Manual commitment mode</span></label>
     <div class="panel" style="margin-top:10px;padding:12px;">
       <h2>Quick peak-stress commitment</h2>
-      <p class="note">Use these buttons to force extra generators ON for the next run. This is handy when you want more units online for a peak-stress day.</p>
+      <p class="note">Use these buttons to force extra generators ON for the next run. This is useful for a peak-stress day, and it lets you compare the UC schedule against the all-on baseline clearly.</p>
       <div id="uc-quick-buttons" class="uc-quick-row"></div>
       <div class="note" style="margin-top:8px;">Selected for next run: <span id="uc-quick-selection">None</span></div>
     </div>
@@ -583,7 +583,7 @@ function rebuildBMatrix(){
 
 function renderGeneratorTable(){
   const table=document.getElementById('gen-table'); const empty=document.getElementById('gen-empty');
-  if(generators.length===0){ table.innerHTML=''; empty.classList.remove('hidden'); return; }
+  if(generators.length===0){ table.innerHTML=''; empty.classList.remove('hidden'); renderUCQuickButtons(); return; }
   empty.classList.add('hidden');
   let html=`<thead><tr><th>Gen</th><th>a</th><th>b</th><th>c</th><th>Pmin</th><th>Pmax</th><th></th></tr></thead><tbody>`;
   generators.forEach((g,i)=>{
@@ -591,6 +591,7 @@ function renderGeneratorTable(){
       <td><button class="btn-icon btn-danger" onclick="removeGenerator(${i})">✕</button></td></tr>`;
   });
   table.innerHTML=html+'</tbody>';
+  renderUCQuickButtons();
 }
 
 /* =========================================================================
@@ -1329,12 +1330,28 @@ function renderUCQuickButtons(){
   const container = document.getElementById('uc-quick-buttons');
   const selection = document.getElementById('uc-quick-selection');
   if(!container || !selection) return;
-  container.innerHTML = generators.map((_,i)=>{
-    const active = ucForcedGenIndices.includes(i);
-    return `<button type="button" class="uc-quick-btn ${active?'active':''}" onclick="toggleUCQuickGenerator(${i})">G${i+1}</button>`;
-  }).join('');
+  const allActive = generators.length > 0 && ucForcedGenIndices.length === generators.length;
+  const noneActive = ucForcedGenIndices.length === 0;
+  container.innerHTML = `
+    <button type="button" class="uc-quick-btn ${allActive?'active':''}" onclick="setUCQuickSelection('all')">All ON</button>
+    <button type="button" class="uc-quick-btn ${noneActive?'active':''}" onclick="setUCQuickSelection('none')">All OFF</button>
+    ${generators.map((_,i)=>{
+      const active = ucForcedGenIndices.includes(i);
+      return `<button type="button" class="uc-quick-btn ${active?'active':''}" onclick="toggleUCQuickGenerator(${i})">G${i+1}</button>`;
+    }).join('')}
+  `;
   const labels = ucForcedGenIndices.length ? ucForcedGenIndices.map(i=>`G${i+1}`).join(', ') : 'None';
   selection.textContent = labels;
+}
+
+function setUCQuickSelection(mode){
+  if(mode==='all'){
+    ucForcedGenIndices = generators.map((_,i)=>i);
+  } else {
+    ucForcedGenIndices = [];
+  }
+  syncUCQuickSelectionToManualGrid();
+  renderUCQuickButtons();
 }
 
 function toggleUCQuickGenerator(index){
@@ -1343,6 +1360,11 @@ function toggleUCQuickGenerator(index){
   } else {
     ucForcedGenIndices.push(index);
   }
+  syncUCQuickSelectionToManualGrid();
+  renderUCQuickButtons();
+}
+
+function syncUCQuickSelectionToManualGrid(){
   if(document.getElementById('uc-manual-mode')?.checked){
     const demands = document.getElementById('uc-loadcurve').value.split(',').map(s=>parseFloat(s.trim())).filter(x=>!isNaN(x));
     initUCManualSchedule(demands.length);
@@ -1353,7 +1375,6 @@ function toggleUCQuickGenerator(index){
     });
     renderUCManualGrid(demands.length);
   }
-  renderUCQuickButtons();
 }
 
 function initUCManualSchedule(numHours){
@@ -1410,10 +1431,11 @@ function renderUCValidationPanel(){
   if(!panel || !currentUCSchedule) return;
   const {ucTotal, allOnCost, mpUcCost, hourlyDetail} = currentUCSchedule;
   const feasible = hourlyDetail.every(h=>!h.infeasible);
+  const startupTotal = hourlyDetail.reduce((sum,h)=>sum + (h.startupCost || 0), 0);
   const costWithin = mpUcCost !== null ? Math.abs(ucTotal-mpUcCost)/Math.max(ucTotal,1) <= 0.03 : false;
-  const passAllOn = ucTotal <= allOnCost;
+  const passAllOn = ucTotal <= allOnCost + startupTotal + 1e-9;
   const statusRows = [
-    {label:'UC vs All-on cost', pass:passAllOn, detail:`₹${ucTotal.toFixed(0)} vs ₹${allOnCost.toFixed(0)}`},
+    {label:'UC vs All-on cost', pass:passAllOn, detail: startupTotal > 0 ? `₹${ucTotal.toFixed(0)} vs ₹${allOnCost.toFixed(0)} (+₹${startupTotal.toFixed(0)} startup charges)` : `₹${ucTotal.toFixed(0)} vs ₹${allOnCost.toFixed(0)}`},
     {label:'UC vs MP(with UC) cost', pass: mpUcCost===null ? false : costWithin, detail: mpUcCost===null ? 'No Multi-Period UC run yet' : `${Math.abs(ucTotal-mpUcCost).toFixed(0)}₹ (${((Math.abs(ucTotal-mpUcCost)/Math.max(ucTotal,1))*100).toFixed(2)}%)`},
     {label:'All hours feasible', pass:feasible, detail: feasible ? 'All committed hours meet demand' : 'Some hours cannot meet demand with committed units'}
   ];
