@@ -38,7 +38,7 @@ This is the easiest way to open the dashboard directly from GitHub in a browser.
 Once published, your dashboard will be available at:
 
 ```text
-https://dispatchpro.com/
+https://rrkcody.github.io/Power_System/
 ```
 
 You can now open that URL anytime from your browser without using Codespaces.

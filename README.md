@@ -66,4 +66,4 @@ This project demonstrates both the theoretical foundation and practical implemen
 
 For local running and online deployment instructions, see [DEPLOY.md](DEPLOY.md).
 
-Once the custom domain is configured, the site will be served at https://dispatchpro.com/.
+The published GitHub Pages site is available at https://rrkcody.github.io/Power_System/.
