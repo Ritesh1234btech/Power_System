@@ -308,11 +308,13 @@ footer{margin-top:30px;text-align:center;color:var(--muted);font-family:var(--fo
   <div id="meta-empty" class="empty-note" style="padding:36px;">Run the suite to see statistics and convergence curves.</div>
   <div id="meta-result" class="hidden">
     <div class="panel"><h2>Multi-Run Statistics (cost, ₹/h)</h2><table id="meta-stats-table"></table></div>
+    <div class="panel"><h2>Best-Run Power Allocation by Algorithm</h2><table id="meta-allocation-table"></table></div>
     <div class="plots-2">
       <div class="plot-box"><div id="plot-meta-convergence" style="height:290px;"></div><div class="cap">Convergence curves — best cost vs iteration (averaged over runs)</div></div>
       <div class="plot-box"><div id="plot-meta-box" style="height:290px;"></div><div class="cap">Cost distribution across runs (box plot)</div></div>
     </div>
     <div class="plot-box" style="margin-top:14px;"><div id="plot-meta-time" style="height:250px;"></div><div class="cap">Mean computation time per run</div></div>
+    <div class="plot-box" style="margin-top:14px;"><div id="plot-meta-allocation" style="height:320px;"></div><div class="cap">Generator-wise power allocation across algorithms</div></div>
   </div>
 </div>
 
@@ -325,6 +327,7 @@ footer{margin-top:30px;text-align:center;color:var(--muted);font-family:var(--fo
       <div class="plot-box"><div id="plot-cmp-box" style="height:280px;"></div><div class="cap">Cost distribution: λ-iteration (deterministic) vs metaheuristics (stochastic)</div></div>
       <div class="plot-box"><div id="plot-cmp-radar" style="height:280px;"></div><div class="cap">Normalized trade-off: cost vs speed vs robustness</div></div>
     </div>
+    <div class="plot-box" style="margin-top:14px;"><div id="plot-cmp-allocation" style="height:320px;"></div><div class="cap">Final power allocation — all methods side by side</div></div>
     <div class="panel" style="margin-top:14px;">
       <h2>Demand Sensitivity Sweep (all methods)</h2>
       <div class="plot-box"><div id="plot-cmp-sweep" style="height:300px;"></div><div class="cap">Total cost vs demand, % of base from setup tab</div></div>
@@ -335,6 +338,7 @@ footer{margin-top:30px;text-align:center;color:var(--muted);font-family:var(--fo
 <footer>Dispatch Pro · λ-iteration + metaheuristic economic dispatch analysis suite · client-side computation only</footer>
 </div>
 
+<script src="allocation_rendering.js"></script>
 <script>
 /* =========================================================================
    STATE
@@ -1926,6 +1930,20 @@ function onRunMetaSuite(){
   Plotly.newPlot('plot-meta-time', [{x:Object.keys(results), y:Object.values(results).map(r=>r.meanTime), type:'bar', marker:{color:'#C1652B'}}],
     baseLayout('Algorithm','Mean time per run (ms)'), {displayModeBar:false,responsive:true});
 
+  renderAllocationTable({
+    tableId: 'meta-allocation-table',
+    metaResults: results,
+    generators,
+    lossFn: (power) => transmissionLoss(power)
+  });
+  renderAllocationChart({
+    plotId: 'plot-meta-allocation',
+    metaResults: results,
+    generators,
+    lambdaPower: lastLambdaResult?.power || [],
+    baseLayout: (xTitle, yTitle) => baseLayout(xTitle, yTitle)
+  });
+
   renderComparisonTab(demand);
 }
 
@@ -1976,6 +1994,14 @@ function renderComparisonTab(demand){
     font:{family:'IBM Plex Mono',size:10,color:'#5B6B7C'},
     legend:{orientation:'h', x:0.5, xanchor:'center', y:-0.2, font:{size:9}}
   }, {displayModeBar:false,responsive:true});
+
+  renderAllocationChart({
+    plotId: 'plot-cmp-allocation',
+    metaResults: lastMetaResults,
+    generators,
+    lambdaPower: lastLambdaResult?.power || [],
+    baseLayout: (xTitle, yTitle) => baseLayout(xTitle, yTitle)
+  });
 
   const [loPct,hiPct] = document.getElementById('in-sweep-range').value.split(',').map(Number);
   const lo=(loPct||80)/100, hi=(hiPct||120)/100;
