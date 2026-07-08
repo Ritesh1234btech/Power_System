@@ -79,6 +79,9 @@ td{padding:7px;border-bottom:1px solid var(--line);}
 .toggle-row input{width:auto;}
 .uc-manual-cell{cursor:pointer;text-align:center;transition:background .2s,color .2s;padding:6px;border:1px solid var(--line);border-radius:4px;}
 .uc-manual-cell.active{background:var(--copper-soft);color:var(--copper);font-weight:700;}
+.uc-quick-row{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;}
+.uc-quick-btn{padding:6px 10px;border-radius:999px;border:1px solid var(--line);background:#fff;color:var(--navy);font-weight:600;}
+.uc-quick-btn.active{background:var(--navy);color:#fff;border-color:var(--navy);} 
 .preset-button.active{background:var(--navy);color:#fff;}
 .infeasible-hour{background:rgba(193,34,34,0.12);color:var(--danger);}
 .pill{display:inline-block;padding:2px 8px;border-radius:20px;font-size:9.5px;font-family:var(--font-mono);}
@@ -229,6 +232,7 @@ footer{margin-top:30px;text-align:center;color:var(--muted);font-family:var(--fo
   </div>
   <div id="mp-empty" class="empty-note" style="padding:36px;">Run the multi-period dispatch to see the schedule.</div>
   <div id="mp-result" class="hidden">
+    <div id="mp-summary" class="stats-strip"></div>
     <div class="plot-box"><div id="plot-mp-stack" style="height:320px;"></div><div class="cap">24-period generation schedule (stacked, ramp-constrained)</div></div>
     <div class="plot-box" style="margin-top:14px;"><div id="plot-mp-cost" style="height:260px;"></div><div class="cap">Hourly cost</div></div>
   </div>
@@ -251,6 +255,12 @@ footer{margin-top:30px;text-align:center;color:var(--muted);font-family:var(--fo
     </div>
     <div class="note" style="margin:6px 0 0;">For a demonstrative commitment schedule showing units turning ON/OFF, ensure demand varies enough that no single unit's Pmax covers the full range — try a peak near 900-1000 MW and a low near 200-300 MW.</div>
     <label class="toggle-row"><input type="checkbox" id="uc-manual-mode" onchange="toggleUCManualMode()"><span>Manual commitment mode</span></label>
+    <div class="panel" style="margin-top:10px;padding:12px;">
+      <h2>Quick peak-stress commitment</h2>
+      <p class="note">Use these buttons to force extra generators ON for the next run. This is handy when you want more units online for a peak-stress day.</p>
+      <div id="uc-quick-buttons" class="uc-quick-row"></div>
+      <div class="note" style="margin-top:8px;">Selected for next run: <span id="uc-quick-selection">None</span></div>
+    </div>
     <div id="uc-manual-instructions" class="note hidden" style="margin:0;padding:0;">Click cells below to toggle ON/OFF. Run the dispatch to apply the selected manual schedule. Infeasible hours will be flagged.</div>
     <div id="uc-manual-grid" class="panel hidden" style="margin-top:10px;padding:10px;"></div>
     <label class="toggle-row"><input type="checkbox" id="uc-force-two"><span>Force minimum 2 units online</span></label>
@@ -339,6 +349,7 @@ let lastLambdaResult = null;
 let lastMetaResults = null; // {GA:{...}, PSO:{...}, GWO:{...}, DE:{...}, 'Vortex Search':{...}}
 let currentUCSchedule = null; // { status, dispatch, demands, hourlyCost, allOnCost, ucTotal, mpUcCost, hourlyDetail, manualMode }
 let ucManualSchedule = null;
+let ucForcedGenIndices = [];
 let selectedUCPreset = null;
 let selectedMPPreset = null;
 
@@ -351,6 +362,7 @@ function switchTab(name){
     document.getElementById('tab-'+t).classList.toggle('hidden', t!==name);
   });
   if(name==='constraints' || name==='unitcommitment') renderConstraintTables();
+  if(name==='unitcommitment') renderUCQuickButtons();
   renderMPUCBadge();
 }
 
@@ -458,14 +470,14 @@ async function exportReport(){
     /* ---------- Cover / summary ---------- */
     addTitle('Dispatch Pro — Economic Load Dispatch Report', 16);
     addLine(`Generated: ${new Date().toLocaleString()}`, 9);
+    addLine('This report highlights the core economic dispatch findings: demand, losses, cost, and key charts.');
     y += 2;
 
-    addTitle('1. λ-Iteration Dispatch Summary', 12);
-    addLine(`Incremental cost λ = ${lastLambdaResult.lambda.toFixed(3)} ₹/MWh`);
-    addLine(`Demand P_D solved = ${document.getElementById('in-demand').value} MW`);
+    addTitle('1. Executive Summary', 12);
+    addLine(`Demand P_D = ${document.getElementById('in-demand').value} MW`);
+    addLine(`λ-iteration dispatch cost = ₹${lastLambdaResult.totalCost.toFixed(2)}/h`);
     addLine(`Transmission loss = ${lastLambdaResult.loss.toFixed(2)} MW`);
-    addLine(`Total generation cost = ₹${lastLambdaResult.totalCost.toFixed(2)}/h`);
-    addLine(`Converged in ${lastLambdaResult.iterations} iterations (tolerance 0.001 MW)`);
+    addLine(`Converged in ${lastLambdaResult.iterations} iterations with λ = ${lastLambdaResult.lambda.toFixed(3)} ₹/MWh`);
     y += 2;
 
     addTable(
@@ -473,46 +485,26 @@ async function exportReport(){
       generators.map((g,i)=>[`G${i+1}`, lastLambdaResult.power[i].toFixed(3), lastLambdaResult.cost[i].toFixed(2)])
     );
 
-    /* ---------- Charts from λ dispatch tab ---------- */
     checkPageBreak(80);
-    addTitle('2. Dispatch Analysis Charts', 12);
+    addTitle('2. Key Charts', 12);
     await captureChartsForTab('dispatch', [
       {id:'plot-convergence', caption:'Figure 1: λ convergence trace across iterations'},
       {id:'plot-incremental', caption:'Figure 2: Incremental cost curves and converged λ*'},
       {id:'plot-cost-curve', caption:'Figure 3: Unit cost curves (with valve-point ripple if enabled)'}
     ]);
 
-    /* ---------- Metaheuristic results, if available ---------- */
     if(lastMetaResults){
       doc.addPage(); y = 18;
-      addTitle('3. Metaheuristic Algorithm Comparison', 12);
-      addLine('Each algorithm executed across multiple independent runs; statistics below summarize the resulting cost distribution.');
+      addTitle('3. Metaheuristic Snapshot', 12);
+      addLine('The best-cost algorithm is shown below for quick comparison during viva or presentation.');
       y += 2;
-
+      const metaEntries = Object.entries(lastMetaResults);
+      const bestMeta = metaEntries.slice().sort((a,b)=>a[1].stats.best-b[1].stats.best)[0];
+      addLine(`Best mean cost: ${bestMeta[0]} at ₹${bestMeta[1].stats.best.toFixed(2)}/run`);
       addTable(
-        ['Algorithm','Mean cost','Std dev','Best','Worst','Mean time (ms)'],
-        Object.entries(lastMetaResults).map(([name,r])=>[
-          name, r.stats.mean.toFixed(2), r.stats.std.toFixed(2),
-          r.stats.best.toFixed(2), r.stats.worst.toFixed(2), r.meanTime.toFixed(2)
-        ])
+        ['Algorithm','Mean cost','Best','Mean time (ms)'],
+        metaEntries.map(([name,r])=>[name, r.stats.mean.toFixed(2), r.stats.best.toFixed(2), r.meanTime.toFixed(2)])
       );
-
-      await captureChartsForTab('meta', [
-        {id:'plot-meta-convergence', caption:'Figure 4: Convergence curves — best cost vs iteration per algorithm'},
-        {id:'plot-meta-box', caption:'Figure 5: Cost distribution across independent runs (box plot)'},
-        {id:'plot-meta-time', caption:'Figure 6: Mean computation time per algorithm'}
-      ]);
-    }
-
-    /* ---------- Comparison tab, if available ---------- */
-    if(lastLambdaResult && lastMetaResults){
-      doc.addPage(); y = 18;
-      addTitle('4. Method Comparison — λ-Iteration vs Metaheuristics', 12);
-      await captureChartsForTab('compare', [
-        {id:'plot-cmp-box', caption:'Figure 7: Cost distribution — deterministic vs stochastic methods'},
-        {id:'plot-cmp-radar', caption:'Figure 8: Normalized trade-off — cost efficiency, speed, robustness'},
-        {id:'plot-cmp-sweep', caption:'Figure 9: Demand sensitivity sweep across all methods'}
-      ]);
     }
 
     doc.save(`ELD_Report_${new Date().toISOString().slice(0,10)}.pdf`);
@@ -892,6 +884,15 @@ function onRunMultiPeriod(){
   document.getElementById('mp-result').classList.remove('hidden');
 
   const periods = schedule.map((_,i)=>i+1);
+  const totalCost = schedule.reduce((sum,s)=>sum + (s.cost || 0), 0);
+  const peakDemand = Math.max(...demands);
+  const peakCost = Math.max(...schedule.map(s=>s.cost || 0));
+  document.getElementById('mp-summary').innerHTML = `
+    <div class="stat-card"><div class="stat-label">Periods</div><div class="stat-value teal">${periods.length}</div></div>
+    <div class="stat-card"><div class="stat-label">Total cost</div><div class="stat-value copper">₹${totalCost.toFixed(0)}</div></div>
+    <div class="stat-card"><div class="stat-label">Peak demand</div><div class="stat-value">${peakDemand.toFixed(1)} MW</div></div>
+    <div class="stat-card"><div class="stat-label">Peak hourly cost</div><div class="stat-value purple">₹${peakCost.toFixed(0)}</div></div>
+    <div class="stat-card"><div class="stat-label">Avg. cost / h</div><div class="stat-value">₹${(totalCost / periods.length).toFixed(0)}</div></div>`;
   const colors=['#0E8C82','#C1652B','#1E3A5F','#8AA6C2','#B08968','#6FBF73'];
   const stackTraces = generators.map((g,gi)=>({
     x:periods, y:schedule.map(s=>s.power[gi]), stackgroup:'one', name:`G${gi+1}`,
@@ -1089,6 +1090,7 @@ function onRunUnitCommitment(){
       {i, avg: averageFullLoadCost(g)}
     )).sort((a,b)=>a.avg-b.avg);
 
+    const forcedOnline = new Set(ucForcedGenIndices);
     const numHours = demands.length;
     const status = Array.from({length:numHours},()=>new Array(generators.length).fill(false));
     const dispatch = Array.from({length:numHours},()=>new Array(generators.length).fill(0));
@@ -1112,7 +1114,7 @@ function onRunUnitCommitment(){
         if(!prevStatus[i] && offTime[i] > 0 && offTime[i] < g.minDownTime){ forcedOff.add(i); }
       });
 
-      let committed = new Set();
+      let committed = new Set(forcedOnline);
       let committedPmax=0;
       let committedPmin=0;
       if(manualMode){
@@ -1133,7 +1135,7 @@ function onRunUnitCommitment(){
           }
         }
       } else {
-        committed = new Set(forcedOn);
+        committed = new Set([...forcedOn, ...forcedOnline]);
         committedPmax = [...committed].reduce((s,i)=>s+generators[i].pmax,0);
         committedPmin = [...committed].reduce((s,i)=>s+generators[i].pmin,0);
         for(const cand of priority){
@@ -1321,6 +1323,37 @@ function toggleUCManualMode(){
     initUCManualSchedule(demands.length);
     renderUCManualGrid(demands.length);
   }
+}
+
+function renderUCQuickButtons(){
+  const container = document.getElementById('uc-quick-buttons');
+  const selection = document.getElementById('uc-quick-selection');
+  if(!container || !selection) return;
+  container.innerHTML = generators.map((_,i)=>{
+    const active = ucForcedGenIndices.includes(i);
+    return `<button type="button" class="uc-quick-btn ${active?'active':''}" onclick="toggleUCQuickGenerator(${i})">G${i+1}</button>`;
+  }).join('');
+  const labels = ucForcedGenIndices.length ? ucForcedGenIndices.map(i=>`G${i+1}`).join(', ') : 'None';
+  selection.textContent = labels;
+}
+
+function toggleUCQuickGenerator(index){
+  if(ucForcedGenIndices.includes(index)){
+    ucForcedGenIndices = ucForcedGenIndices.filter(i=>i!==index);
+  } else {
+    ucForcedGenIndices.push(index);
+  }
+  if(document.getElementById('uc-manual-mode')?.checked){
+    const demands = document.getElementById('uc-loadcurve').value.split(',').map(s=>parseFloat(s.trim())).filter(x=>!isNaN(x));
+    initUCManualSchedule(demands.length);
+    ucManualSchedule = ucManualSchedule.map(row=>{
+      const nextRow = row.slice();
+      ucForcedGenIndices.forEach(i=>{ nextRow[i] = true; });
+      return nextRow;
+    });
+    renderUCManualGrid(demands.length);
+  }
+  renderUCQuickButtons();
 }
 
 function initUCManualSchedule(numHours){
