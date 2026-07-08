@@ -351,6 +351,7 @@ let lastMetaResults = null; // {GA:{...}, PSO:{...}, GWO:{...}, DE:{...}, 'Vorte
 let currentUCSchedule = null; // { status, dispatch, demands, hourlyCost, allOnCost, ucTotal, mpUcCost, hourlyDetail, manualMode }
 let ucManualSchedule = null;
 let ucForcedGenIndices = [];
+let ucQuickSelectionMode = 'auto';
 let selectedUCPreset = null;
 let selectedMPPreset = null;
 
@@ -1092,7 +1093,7 @@ function onRunUnitCommitment(){
       {i, avg: averageFullLoadCost(g)}
     )).sort((a,b)=>a.avg-b.avg);
 
-    const forcedOnline = new Set(ucForcedGenIndices);
+    const forcedOnline = new Set(ucQuickSelectionMode === 'none' ? [] : ucForcedGenIndices);
     const numHours = demands.length;
     const status = Array.from({length:numHours},()=>new Array(generators.length).fill(false));
     const dispatch = Array.from({length:numHours},()=>new Array(generators.length).fill(0));
@@ -1119,7 +1120,11 @@ function onRunUnitCommitment(){
       let committed = new Set(forcedOnline);
       let committedPmax=0;
       let committedPmin=0;
-      if(manualMode){
+      if(ucQuickSelectionMode === 'none'){
+        committed = new Set();
+        committedPmax = 0;
+        committedPmin = 0;
+      } else if(manualMode){
         ucManualSchedule[h].forEach((on,i)=>{
           if(on){
             committed.add(i);
@@ -1331,36 +1336,48 @@ function renderUCQuickButtons(){
   const container = document.getElementById('uc-quick-buttons');
   const selection = document.getElementById('uc-quick-selection');
   if(!container || !selection) return;
-  const allActive = generators.length > 0 && ucForcedGenIndices.length === generators.length;
-  const noneActive = ucForcedGenIndices.length === 0;
+  const allActive = generators.length > 0 && ucQuickSelectionMode === 'all';
+  const noneActive = ucQuickSelectionMode === 'none';
   container.innerHTML = `
     <button type="button" class="uc-quick-btn ${allActive?'active':''}" onclick="setUCQuickSelection('all')">All ON</button>
     <button type="button" class="uc-quick-btn ${noneActive?'active':''}" onclick="setUCQuickSelection('none')">All OFF</button>
     ${generators.map((_,i)=>{
-      const active = ucForcedGenIndices.includes(i);
+      const active = ucQuickSelectionMode === 'custom' && ucForcedGenIndices.includes(i);
       return `<button type="button" class="uc-quick-btn ${active?'active':''}" onclick="toggleUCQuickGenerator(${i})">G${i+1}</button>`;
     }).join('')}
   `;
-  const labels = ucForcedGenIndices.length ? ucForcedGenIndices.map(i=>`G${i+1}`).join(', ') : 'None';
+  const labels = ucQuickSelectionMode === 'all'
+    ? 'All generators'
+    : ucQuickSelectionMode === 'none'
+      ? 'None'
+      : (ucForcedGenIndices.length ? ucForcedGenIndices.map(i=>`G${i+1}`).join(', ') : 'None');
   selection.textContent = labels;
 }
 
 function setUCQuickSelection(mode){
   if(mode==='all'){
     ucForcedGenIndices = generators.map((_,i)=>i);
-  } else {
+    ucQuickSelectionMode = 'all';
+  } else if(mode==='none'){
     ucForcedGenIndices = [];
+    ucQuickSelectionMode = 'none';
+  } else {
+    ucQuickSelectionMode = 'custom';
   }
   syncUCQuickSelectionToManualGrid();
   renderUCQuickButtons();
 }
 
 function toggleUCQuickGenerator(index){
+  if(ucQuickSelectionMode === 'all' || ucQuickSelectionMode === 'none'){
+    ucForcedGenIndices = [];
+  }
   if(ucForcedGenIndices.includes(index)){
     ucForcedGenIndices = ucForcedGenIndices.filter(i=>i!==index);
   } else {
     ucForcedGenIndices.push(index);
   }
+  ucQuickSelectionMode = ucForcedGenIndices.length ? 'custom' : 'none';
   syncUCQuickSelectionToManualGrid();
   renderUCQuickButtons();
 }
