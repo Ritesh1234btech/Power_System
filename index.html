@@ -257,7 +257,7 @@ footer{margin-top:30px;text-align:center;color:var(--muted);font-family:var(--fo
     <label class="toggle-row"><input type="checkbox" id="uc-manual-mode" onchange="toggleUCManualMode()"><span>Manual commitment mode</span></label>
     <div class="panel" style="margin-top:10px;padding:12px;">
       <h2>Commitment Mode</h2>
-      <p class="note">Choose the simplest operating mode for the next run. Use All ON for peak stress or All OFF to keep every generator shut down.</p>
+      <p class="note">Choose the simplest operating mode for the next run. Use All ON for peak stress or All OFF to keep every generator shut down. Click generator buttons to make only those units online for the next run.</p>
       <div id="uc-quick-buttons" class="uc-quick-row"></div>
       <div class="note" style="margin-top:8px;">Next run mode: <span id="uc-quick-selection">Auto</span></div>
       <div id="uc-keep-on-panel" style="margin-top:10px;"></div>
@@ -1093,10 +1093,7 @@ function onRunUnitCommitment(){
       {i, avg: averageFullLoadCost(g)}
     )).sort((a,b)=>a.avg-b.avg);
 
-    const forcedOnline = new Set(ucKeepOnGenerators);
-    if(ucQuickSelectionMode === 'all'){
-      generators.forEach((_,i)=>forcedOnline.add(i));
-    }
+    const forcedOnline = new Set();
     const numHours = demands.length;
     const status = Array.from({length:numHours},()=>new Array(generators.length).fill(false));
     const dispatch = Array.from({length:numHours},()=>new Array(generators.length).fill(0));
@@ -1144,6 +1141,18 @@ function onRunUnitCommitment(){
             if(committed.size >= 2) break;
           }
         }
+      } else if(ucQuickSelectionMode === 'selected'){
+        ucKeepOnGenerators.forEach(i=>{
+          committed.add(i);
+          committedPmax += generators[i].pmax;
+          committedPmin += generators[i].pmin;
+        });
+      } else if(ucQuickSelectionMode === 'all'){
+        generators.forEach((_,i)=>{
+          committed.add(i);
+          committedPmax += generators[i].pmax;
+          committedPmin += generators[i].pmin;
+        });
       } else {
         committed = new Set([...forcedOn, ...forcedOnline]);
         committedPmax = [...committed].reduce((s,i)=>s+generators[i].pmax,0);
@@ -1345,12 +1354,22 @@ function renderUCQuickButtons(){
     <button type="button" class="uc-quick-btn ${allActive?'active':''}" onclick="setUCQuickSelection('all')">All ON</button>
     <button type="button" class="uc-quick-btn ${noneActive?'active':''}" onclick="setUCQuickSelection('none')">All OFF</button>
   `;
-  selection.textContent = ucQuickSelectionMode === 'all' ? 'All generators' : ucQuickSelectionMode === 'none' ? 'No generators' : 'Auto';
+  const selectedNames = ucKeepOnGenerators.map(i=>`G${i+1}`);
+  selection.textContent = ucQuickSelectionMode === 'all'
+    ? 'All generators'
+    : ucQuickSelectionMode === 'none'
+      ? 'No generators'
+      : ucQuickSelectionMode === 'selected' && selectedNames.length
+        ? `Only ${selectedNames.join(', ')}`
+        : 'Auto';
   renderUCKeepOnPanel();
 }
 
 function setUCQuickSelection(mode){
   ucQuickSelectionMode = mode;
+  if(mode !== 'selected'){
+    ucKeepOnGenerators = [];
+  }
   syncUCQuickSelectionToManualGrid();
   renderUCQuickButtons();
 }
@@ -1358,9 +1377,9 @@ function setUCQuickSelection(mode){
 function renderUCKeepOnPanel(){
   const panel = document.getElementById('uc-keep-on-panel');
   if(!panel) return;
-  if(generators.length === 0){ panel.innerHTML = '<div class="note">Add generators first to keep specific units online.</div>'; return; }
+  if(generators.length === 0){ panel.innerHTML = '<div class="note">Add generators first to select units that should be online only.</div>'; return; }
   panel.innerHTML = `
-    <div class="note" style="margin-bottom:6px;">Keep these generators ON for every hour:</div>
+    <div class="note" style="margin-bottom:6px;">Select the generators that should be online only:</div>
     <div class="uc-quick-row">
       ${generators.map((_,i)=>`
         <button type="button" class="uc-quick-btn ${ucKeepOnGenerators.includes(i)?'active':''}" onclick="toggleUCKeepOn(${i})">G${i+1}</button>
@@ -1375,7 +1394,9 @@ function toggleUCKeepOn(index){
   } else {
     ucKeepOnGenerators.push(index);
   }
-  renderUCKeepOnPanel();
+  ucQuickSelectionMode = ucKeepOnGenerators.length > 0 ? 'selected' : 'auto';
+  syncUCQuickSelectionToManualGrid();
+  renderUCQuickButtons();
 }
 
 function syncUCQuickSelectionToManualGrid(){
@@ -1385,13 +1406,13 @@ function syncUCQuickSelectionToManualGrid(){
   ucManualSchedule = Array.from({length:demands.length},()=>Array(generators.length).fill(false));
   if(ucQuickSelectionMode === 'all'){
     ucManualSchedule = Array.from({length:demands.length},()=>Array(generators.length).fill(true));
-  }
-  if(ucQuickSelectionMode === 'none'){
+  } else if(ucQuickSelectionMode === 'none'){
     ucManualSchedule = Array.from({length:demands.length},()=>Array(generators.length).fill(false));
+  } else if(ucQuickSelectionMode === 'selected'){
+    ucKeepOnGenerators.forEach(i=>{
+      ucManualSchedule.forEach(row=>{ row[i] = true; });
+    });
   }
-  ucKeepOnGenerators.forEach(i=>{
-    ucManualSchedule.forEach(row=>{ row[i] = true; });
-  });
   if(document.getElementById('uc-manual-mode')?.checked){
     renderUCManualGrid(demands.length);
   }
