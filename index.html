@@ -260,6 +260,7 @@ footer{margin-top:30px;text-align:center;color:var(--muted);font-family:var(--fo
       <p class="note">Use these buttons to force extra generators ON for the next run. This is useful for a peak-stress day, and it lets you compare the UC schedule against the all-on baseline clearly.</p>
       <div id="uc-quick-buttons" class="uc-quick-row"></div>
       <div class="note" style="margin-top:8px;">Selected for next run: <span id="uc-quick-selection">None</span></div>
+      <button type="button" class="btn-danger" style="margin-top:8px;" onclick="setUCQuickSelection('none')">Turn Off All Generators</button>
     </div>
     <div id="uc-manual-instructions" class="note hidden" style="margin:0;padding:0;">Click cells below to toggle ON/OFF. Run the dispatch to apply the selected manual schedule. Infeasible hours will be flagged.</div>
     <div id="uc-manual-grid" class="panel hidden" style="margin-top:10px;padding:10px;"></div>
