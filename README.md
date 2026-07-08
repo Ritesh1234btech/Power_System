@@ -65,3 +65,5 @@ This project demonstrates both the theoretical foundation and practical implemen
 ## Deployment
 
 For local running and online deployment instructions, see [DEPLOY.md](DEPLOY.md).
+
+Once the custom domain is configured, the site will be served at https://dispatchpro.com/.
