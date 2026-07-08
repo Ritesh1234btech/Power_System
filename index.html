@@ -260,6 +260,7 @@ footer{margin-top:30px;text-align:center;color:var(--muted);font-family:var(--fo
       <p class="note">Choose the simplest operating mode for the next run. Use All ON for peak stress or All OFF to keep every generator shut down.</p>
       <div id="uc-quick-buttons" class="uc-quick-row"></div>
       <div class="note" style="margin-top:8px;">Next run mode: <span id="uc-quick-selection">Auto</span></div>
+      <div id="uc-keep-on-panel" style="margin-top:10px;"></div>
     </div>
     <div id="uc-manual-instructions" class="note hidden" style="margin:0;padding:0;">Click cells below to toggle ON/OFF. Run the dispatch to apply the selected manual schedule. Infeasible hours will be flagged.</div>
     <div id="uc-manual-grid" class="panel hidden" style="margin-top:10px;padding:10px;"></div>
@@ -350,6 +351,7 @@ let lastMetaResults = null; // {GA:{...}, PSO:{...}, GWO:{...}, DE:{...}, 'Vorte
 let currentUCSchedule = null; // { status, dispatch, demands, hourlyCost, allOnCost, ucTotal, mpUcCost, hourlyDetail, manualMode }
 let ucManualSchedule = null;
 let ucQuickSelectionMode = 'auto';
+let ucKeepOnGenerators = [];
 let selectedUCPreset = null;
 let selectedMPPreset = null;
 
@@ -1091,7 +1093,7 @@ function onRunUnitCommitment(){
       {i, avg: averageFullLoadCost(g)}
     )).sort((a,b)=>a.avg-b.avg);
 
-    const forcedOnline = new Set();
+    const forcedOnline = new Set(ucKeepOnGenerators);
     if(ucQuickSelectionMode === 'all'){
       generators.forEach((_,i)=>forcedOnline.add(i));
     }
@@ -1344,12 +1346,36 @@ function renderUCQuickButtons(){
     <button type="button" class="uc-quick-btn ${noneActive?'active':''}" onclick="setUCQuickSelection('none')">All OFF</button>
   `;
   selection.textContent = ucQuickSelectionMode === 'all' ? 'All generators' : ucQuickSelectionMode === 'none' ? 'No generators' : 'Auto';
+  renderUCKeepOnPanel();
 }
 
 function setUCQuickSelection(mode){
   ucQuickSelectionMode = mode;
   syncUCQuickSelectionToManualGrid();
   renderUCQuickButtons();
+}
+
+function renderUCKeepOnPanel(){
+  const panel = document.getElementById('uc-keep-on-panel');
+  if(!panel) return;
+  if(generators.length === 0){ panel.innerHTML = '<div class="note">Add generators first to keep specific units online.</div>'; return; }
+  panel.innerHTML = `
+    <div class="note" style="margin-bottom:6px;">Keep these generators ON for every hour:</div>
+    <div class="uc-quick-row">
+      ${generators.map((_,i)=>`
+        <button type="button" class="uc-quick-btn ${ucKeepOnGenerators.includes(i)?'active':''}" onclick="toggleUCKeepOn(${i})">G${i+1}</button>
+      `).join('')}
+    </div>
+  `;
+}
+
+function toggleUCKeepOn(index){
+  if(ucKeepOnGenerators.includes(index)){
+    ucKeepOnGenerators = ucKeepOnGenerators.filter(i=>i!==index);
+  } else {
+    ucKeepOnGenerators.push(index);
+  }
+  renderUCKeepOnPanel();
 }
 
 function syncUCQuickSelectionToManualGrid(){
@@ -1360,6 +1386,12 @@ function syncUCQuickSelectionToManualGrid(){
   if(ucQuickSelectionMode === 'all'){
     ucManualSchedule = Array.from({length:demands.length},()=>Array(generators.length).fill(true));
   }
+  if(ucQuickSelectionMode === 'none'){
+    ucManualSchedule = Array.from({length:demands.length},()=>Array(generators.length).fill(false));
+  }
+  ucKeepOnGenerators.forEach(i=>{
+    ucManualSchedule.forEach(row=>{ row[i] = true; });
+  });
   if(document.getElementById('uc-manual-mode')?.checked){
     renderUCManualGrid(demands.length);
   }
