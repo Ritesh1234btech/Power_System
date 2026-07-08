@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>Dispatch Pro — Economic Load Dispatch Analysis Suite</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -1005,6 +1008,15 @@ function runAllOnMultiPeriod(demands){
   return schedule;
 }
 
+function computeStartupCostForHour(hourStatus, prevHourStatus, gens){
+  const prev = Array.isArray(prevHourStatus) ? prevHourStatus : gens.map(()=>false);
+  let startup = 0;
+  hourStatus.forEach((isOn, i)=>{
+    if(isOn && !prev[i]) startup += gens[i].startupCost || 0;
+  });
+  return startup;
+}
+
 function runMultiPeriodWithUCSchedule(demands){
   if(!currentUCSchedule || !Array.isArray(currentUCSchedule.status) || currentUCSchedule.status.length === 0) return null;
   if(!Array.isArray(currentUCSchedule.demands) || currentUCSchedule.demands.length !== demands.length) return null;
@@ -1015,12 +1027,11 @@ function runMultiPeriodWithUCSchedule(demands){
   demands.forEach((d,h)=>{
     const hourStatus = currentUCSchedule.status[h];
     const indices = hourStatus.map((on,i)=> on ? i : -1).filter(i=>i>=0);
-    let startup = 0;
+    const startup = computeStartupCostForHour(hourStatus, prevStatus, generators);
     const tempGens=[];
     indices.forEach(i=>{
       const g = generators[i];
-      const wasOn = h > 0 && currentUCSchedule.status[h-1][i];
-      if(!wasOn) startup += g.startupCost || 0;
+      const wasOn = prevStatus[i];
       const stayingOn = wasOn;
       let pminEff = g.pmin;
       let pmaxEff = g.pmax;
@@ -1148,6 +1159,7 @@ function onRunUnitCommitment(){
 
       const indices=[];
       const tempGens = [];
+      const hourStatus = new Array(generators.length).fill(false);
       const hourDetail = {hour:h+1,demand,committed:[],unitDetails:[],startupCost:0,fuelCost:0,totalCost:0,infeasible:false};
       committed.forEach(i=>{
         const g=generators[i];
@@ -1161,17 +1173,14 @@ function onRunUnitCommitment(){
         if(pmaxEff < pminEff){ pmaxEff = pminEff; }
         tempGens.push({...g,pmin:pminEff,pmax:pmaxEff});
         indices.push(i);
+        hourStatus[i] = true;
         hourDetail.committed.push(`G${i+1}`);
       });
 
       const result = solveLambdaSubset(tempGens, demand, indices);
       if(!result.ok){ alert(`Unit commitment dispatch failed at hour ${h+1}. Check ramp/min-up/min-down feasibility.`); return; }
 
-      let startup = 0;
-      indices.forEach(i=>{
-        const wasOn = h > 0 ? (manualMode ? ucManualSchedule[h-1][i] : prevStatus[i]) : false;
-        if(!wasOn) startup += generators[i].startupCost || 0;
-      });
+      const startup = computeStartupCostForHour(hourStatus, prevStatus, generators);
       totalStartupCost[h] = startup;
 
       indices.forEach((i,j)=>{
@@ -1208,7 +1217,7 @@ function onRunUnitCommitment(){
     const mpUcSchedule = runMultiPeriodWithUCSchedule(demands);
     const mpUcCost = mpUcSchedule ? mpUcSchedule.reduce((s,h)=>s+(h.cost||0),0) : null;
 
-    if(ucTotal > allOnCost){
+    if(ucTotal > allOnCost + 1e-9){
       console.warn('UC total cost is higher than all-on baseline:', ucTotal, '>', allOnCost);
     }
 
