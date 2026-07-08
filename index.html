@@ -256,11 +256,10 @@ footer{margin-top:30px;text-align:center;color:var(--muted);font-family:var(--fo
     <div class="note" style="margin:6px 0 0;">For a demonstrative commitment schedule showing units turning ON/OFF, ensure demand varies enough that no single unit's Pmax covers the full range — try a peak near 900-1000 MW and a low near 200-300 MW.</div>
     <label class="toggle-row"><input type="checkbox" id="uc-manual-mode" onchange="toggleUCManualMode()"><span>Manual commitment mode</span></label>
     <div class="panel" style="margin-top:10px;padding:12px;">
-      <h2>Quick peak-stress commitment</h2>
-      <p class="note">Use these buttons to force extra generators ON for the next run. This is useful for a peak-stress day, and it lets you compare the UC schedule against the all-on baseline clearly.</p>
+      <h2>Commitment Mode</h2>
+      <p class="note">Choose the simplest operating mode for the next run. Use All ON for peak stress or All OFF to keep every generator shut down.</p>
       <div id="uc-quick-buttons" class="uc-quick-row"></div>
-      <div class="note" style="margin-top:8px;">Selected for next run: <span id="uc-quick-selection">None</span></div>
-      <button type="button" class="btn-danger" style="margin-top:8px;" onclick="setUCQuickSelection('none')">Turn Off All Generators</button>
+      <div class="note" style="margin-top:8px;">Next run mode: <span id="uc-quick-selection">Auto</span></div>
     </div>
     <div id="uc-manual-instructions" class="note hidden" style="margin:0;padding:0;">Click cells below to toggle ON/OFF. Run the dispatch to apply the selected manual schedule. Infeasible hours will be flagged.</div>
     <div id="uc-manual-grid" class="panel hidden" style="margin-top:10px;padding:10px;"></div>
@@ -350,7 +349,6 @@ let lastLambdaResult = null;
 let lastMetaResults = null; // {GA:{...}, PSO:{...}, GWO:{...}, DE:{...}, 'Vortex Search':{...}}
 let currentUCSchedule = null; // { status, dispatch, demands, hourlyCost, allOnCost, ucTotal, mpUcCost, hourlyDetail, manualMode }
 let ucManualSchedule = null;
-let ucForcedGenIndices = [];
 let ucQuickSelectionMode = 'auto';
 let selectedUCPreset = null;
 let selectedMPPreset = null;
@@ -1093,7 +1091,10 @@ function onRunUnitCommitment(){
       {i, avg: averageFullLoadCost(g)}
     )).sort((a,b)=>a.avg-b.avg);
 
-    const forcedOnline = new Set(ucQuickSelectionMode === 'none' ? [] : ucForcedGenIndices);
+    const forcedOnline = new Set();
+    if(ucQuickSelectionMode === 'all'){
+      generators.forEach((_,i)=>forcedOnline.add(i));
+    }
     const numHours = demands.length;
     const status = Array.from({length:numHours},()=>new Array(generators.length).fill(false));
     const dispatch = Array.from({length:numHours},()=>new Array(generators.length).fill(0));
@@ -1336,48 +1337,17 @@ function renderUCQuickButtons(){
   const container = document.getElementById('uc-quick-buttons');
   const selection = document.getElementById('uc-quick-selection');
   if(!container || !selection) return;
-  const allActive = generators.length > 0 && ucQuickSelectionMode === 'all';
+  const allActive = ucQuickSelectionMode === 'all';
   const noneActive = ucQuickSelectionMode === 'none';
   container.innerHTML = `
     <button type="button" class="uc-quick-btn ${allActive?'active':''}" onclick="setUCQuickSelection('all')">All ON</button>
     <button type="button" class="uc-quick-btn ${noneActive?'active':''}" onclick="setUCQuickSelection('none')">All OFF</button>
-    ${generators.map((_,i)=>{
-      const active = ucQuickSelectionMode === 'custom' && ucForcedGenIndices.includes(i);
-      return `<button type="button" class="uc-quick-btn ${active?'active':''}" onclick="toggleUCQuickGenerator(${i})">G${i+1}</button>`;
-    }).join('')}
   `;
-  const labels = ucQuickSelectionMode === 'all'
-    ? 'All generators'
-    : ucQuickSelectionMode === 'none'
-      ? 'None'
-      : (ucForcedGenIndices.length ? ucForcedGenIndices.map(i=>`G${i+1}`).join(', ') : 'None');
-  selection.textContent = labels;
+  selection.textContent = ucQuickSelectionMode === 'all' ? 'All generators' : ucQuickSelectionMode === 'none' ? 'No generators' : 'Auto';
 }
 
 function setUCQuickSelection(mode){
-  if(mode==='all'){
-    ucForcedGenIndices = generators.map((_,i)=>i);
-    ucQuickSelectionMode = 'all';
-  } else if(mode==='none'){
-    ucForcedGenIndices = [];
-    ucQuickSelectionMode = 'none';
-  } else {
-    ucQuickSelectionMode = 'custom';
-  }
-  syncUCQuickSelectionToManualGrid();
-  renderUCQuickButtons();
-}
-
-function toggleUCQuickGenerator(index){
-  if(ucQuickSelectionMode === 'all' || ucQuickSelectionMode === 'none'){
-    ucForcedGenIndices = [];
-  }
-  if(ucForcedGenIndices.includes(index)){
-    ucForcedGenIndices = ucForcedGenIndices.filter(i=>i!==index);
-  } else {
-    ucForcedGenIndices.push(index);
-  }
-  ucQuickSelectionMode = ucForcedGenIndices.length ? 'custom' : 'none';
+  ucQuickSelectionMode = mode;
   syncUCQuickSelectionToManualGrid();
   renderUCQuickButtons();
 }
@@ -1387,9 +1357,9 @@ function syncUCQuickSelectionToManualGrid(){
   if(demands.length===0) return;
   initUCManualSchedule(demands.length);
   ucManualSchedule = Array.from({length:demands.length},()=>Array(generators.length).fill(false));
-  ucForcedGenIndices.forEach(i=>{
-    ucManualSchedule.forEach(row=>{ row[i] = true; });
-  });
+  if(ucQuickSelectionMode === 'all'){
+    ucManualSchedule = Array.from({length:demands.length},()=>Array(generators.length).fill(true));
+  }
   if(document.getElementById('uc-manual-mode')?.checked){
     renderUCManualGrid(demands.length);
   }
